@@ -125,8 +125,9 @@ namespace {
     }
     class FCIP_Service {
         public static $reservations = array(), $plans = array();
+        public static $plan_error = false;
         public static function set_permanent($id, $permanent) { self::$reservations[] = array($id, $permanent); return array('changed' => true); }
-        public static function upgrade_site_plan($id, $plan) { self::$plans[] = array($id, $plan); return array('success' => true); }
+        public static function upgrade_site_plan($id, $plan) { self::$plans[] = array($id, $plan); return self::$plan_error ? new WP_Error('upgrade_failed', 'Plan rejected') : array('success' => true); }
     }
     require __DIR__ . '/../includes/core/class-fcip-site-manager.php';
     foreach (array('order-processor', 'integration', 'portal', 'subscriptions') as $file) require __DIR__ . '/../includes/integrations/fluentcart/class-fcip-fluentcart-' . $file . '.php';
@@ -215,6 +216,65 @@ namespace {
     check(count(FCIP_Service::$plans) === 1 && FCIP_Service::$plans[0][1] === 'higher-plan', 'Plan changes upgrade existing site instead of provisioning');
     $subscriptions->plan_changed(array('order' => array('id' => 40), 'old_variation' => array('id' => 66), 'new_variation' => array('id' => 77, 'post_id' => 55)));
     check(count(FCIP_Service::$plans) === 1, 'Repeated plan events do not change the site twice');
+
+    // Fire the documented Pro hook with model payloads and distinct orders.
+    FCIP_API_Client::$mode = 'ready';
+    $original = new \FluentCart\App\Models\Order(60);
+    $processor->process_feed($original, 55, $feed, 7);
+    $original_site = FCIP_FluentCart_Order_Processor::sites(60)[0];
+    $site_count = count(FCIP_Sites_Model::$rows);
+    $requests = count_requests();
+    $upgrade = new \FluentCart\App\Models\Order(61);
+    $upgrade->order_items[0]->object_id = 77;
+    $upgrade->order_items[0]->id = 199;
+    $replacement = new \FluentCart\App\Models\Subscription();
+    $replacement->id = 4; $replacement->parent_order_id = 61; $replacement->variation_id = 77; $replacement->status = 'active';
+    \FluentCart\App\Models\Subscription::$rows[4] = $replacement;
+    $payload = array('order' => $upgrade, 'from_order' => $original, 'from_variant_id' => 66);
+
+    $upgrade->payment_status = 'pending';
+    do_action('fluent_cart/order/upgraded', $payload);
+    check(count(FCIP_Service::$plans) === 1 && $original_site->order_id === 60, 'Unpaid upgrades cannot change hosting plans');
+    $upgrade->payment_status = 'paid';
+    $options['enable_integration'] = 'no';
+    do_action('fluent_cart/order/upgraded', $payload);
+    check(count(FCIP_Service::$plans) === 1, 'Disabled integration ignores upgrade API calls');
+    $options['enable_integration'] = 'yes';
+    $locks['fcip_fc_lock_61'] = 'another worker';
+    do_action('fluent_cart/order/upgraded', $payload);
+    check(count(FCIP_Service::$plans) === 1 && !isset($locks['fcip_fc_lock_60']) && isset($locks['fcip_fc_lock_61']), 'Upgrade releases acquired locks when the destination order is locked');
+    unset($locks['fcip_fc_lock_61']);
+
+    $mapping->meta_value['plan_id'] = '';
+    do_action('fluent_cart/order/upgraded', $payload);
+    $processor->process_feed($upgrade, 55, $feed, 7);
+    check(count(FCIP_Service::$plans) === 1 && count_requests() === $requests, 'Missing upgrade mapping cannot create a replacement site');
+    $mapping->meta_value['plan_id'] = 'higher-plan';
+    FCIP_Service::$plan_error = true;
+    do_action('fluent_cart/order/upgraded', $payload);
+    check($original_site->plan_id === 'hosting-plan' && $original_site->order_id === 60, 'API failure preserves the original plan and order association');
+    FCIP_Service::$plan_error = false;
+    do_action('fluent_cart/order/upgraded', $payload);
+    check($original_site->plan_id === 'higher-plan' && $original_site->order_id === 61, 'Completed upgrade applies the target plan to the original site and transfers tracking');
+    $context = json_decode($original_site->source_data, true);
+    check($context['variation_id'] === 77 && $context['subscription_id'] === 4 && $context['item_id'] === 199, 'Upgrade tracks the new variant, subscription and order item');
+    check(FCIP_FluentCart_Order_Processor::sites(60) === array() && FCIP_FluentCart_Order_Processor::sites(61)[0]->site_id === $original_site->site_id, 'Customer portal finds the same site on the new order');
+    $plan_calls = count(FCIP_Service::$plans);
+    do_action('fluent_cart/order/upgraded', $payload);
+    $processor->process_feed($upgrade, 55, $feed, 7);
+    check(count(FCIP_Service::$plans) === $plan_calls && count_requests() === $requests && count(FCIP_Sites_Model::$rows) === $site_count, 'Repeated upgrade hooks and paid feeds neither reapply the plan nor provision another site');
+    $reservations = count(FCIP_Service::$reservations);
+    do_action('fluent_cart/subscription_canceled', array('subscription' => $replacement));
+    check(count(FCIP_Service::$reservations) === $reservations + 1 && end(FCIP_Service::$reservations)[0] === $original_site->site_id, 'Replacement subscription cancellation manages the upgraded site');
+
+    // A later upgrade starts from the previous upgrade order.
+    $next_upgrade = new \FluentCart\App\Models\Order(62);
+    $next_upgrade->order_items[0]->object_id = 88;
+    $mapping->meta_value['plan_id'] = 'highest-plan';
+    $mapping->meta_value['conditional_variation_ids'] = array(88);
+    do_action('fluent_cart/order/upgraded', array('order' => $next_upgrade, 'from_order' => $upgrade, 'from_variant_id' => 77));
+    check($original_site->plan_id === 'highest-plan' && $original_site->order_id === 62 && count_requests() === $requests, 'Chained upgrades continue to use the original site');
+
     $validated = $integration->validateFeedData(array_merge($feed, array('event_trigger' => array('order_created'))), array());
     check($validated['event_trigger'] === array('order_paid_done'), 'Feed saving cannot enable pre-payment provisioning');
     echo "FluentCart provisioning, lifecycle, ownership and deduplication checks passed.\n";

@@ -10,6 +10,7 @@ class FCIP_FluentCart_Subscriptions {
         foreach (array('canceled', 'paused', 'renewal_failed', 'eot', 'expired_validity') as $event) {
             add_action('fluent_cart/subscription_' . $event, array($this, 'deactivate'), 20);
         }
+        add_action('fluent_cart/order/upgraded', array($this, 'order_upgraded'), 20);
         add_action('fluent_cart/plan_changed', array($this, 'plan_changed'), 20);
         add_action('fcip_fluentcart_site_status_updated', array($this, 'sync_completed_site'), 20, 2);
     }
@@ -70,6 +71,39 @@ class FCIP_FluentCart_Subscriptions {
         }
     }
 
+    /** FluentCart Pro passes the new and original Order models, not variation arrays. */
+    public function order_upgraded($data) {
+        $order = $data['order'] ?? null;
+        $from_order = $data['from_order'] ?? null;
+        $old_variant_id = absint($data['from_variant_id'] ?? 0);
+        if (!$order instanceof \FluentCart\App\Models\Order || !$from_order instanceof \FluentCart\App\Models\Order
+            || !FCIP_FluentCart_Order_Processor::is_paid($order) || !$old_variant_id
+            || (int) $order->id === (int) $from_order->id
+            || (int) $order->customer_id !== (int) $from_order->customer_id) {
+            return;
+        }
+        // Paid notifications for this order must never provision a replacement site,
+        // even if a missing plan mapping or an API error holds the upgrade for review.
+        $order->updateMeta('_fcip_upgrade_from_order_id', (int) $from_order->id);
+        if (!$this->enabled()) {
+            return;
+        }
+        $items = array();
+        foreach ($order->order_items as $item) {
+            if (!in_array($item->payment_type, array('fee', 'signup_fee'), true) && !empty($item->object_id) && !empty($item->post_id)) {
+                $items[] = $item;
+            }
+        }
+        if (count($items) !== 1) {
+            $order->addLog('InstaWP plan change skipped', 'Cannot identify one target variant in the upgrade order.', 'error');
+            return;
+        }
+        $item = $items[0];
+        $this->apply_plan_change($order, $from_order, $old_variant_id, array(
+            'id' => (int) $item->object_id, 'post_id' => (int) $item->post_id, 'item_id' => (int) $item->id,
+        ));
+    }
+
     public function plan_changed($data) {
         if (!$this->enabled()) {
             return;
@@ -80,6 +114,13 @@ class FCIP_FluentCart_Subscriptions {
         $new = $data['new_variation'] ?? array();
         $order = \FluentCart\App\Models\Order::find(absint($order_data['id'] ?? 0));
         if (!$order || !FCIP_FluentCart_Order_Processor::is_paid($order) || empty($old['id']) || empty($new['id'])) {
+            return;
+        }
+        $this->apply_plan_change($order, $order, (int) $old['id'], $new);
+    }
+
+    private function apply_plan_change($order, $from_order, $old_variant_id, $new) {
+        if (empty($new['post_id'])) {
             return;
         }
         $feeds = \FluentCart\App\Models\ProductMeta::query()->where('object_id', $new['post_id'])
@@ -98,13 +139,22 @@ class FCIP_FluentCart_Subscriptions {
             $order->addLog('InstaWP plan change skipped', 'Configure one unambiguous InstaWP hosting plan for the new variant.', 'error');
             return;
         }
-        if (!add_option('fcip_fc_lock_' . $order->id, current_time('mysql'), '', false)) {
-            return;
-        }
+        // Lock both orders so provisioning and repeated upgrade notifications
+        // cannot race the transfer to the new order.
+        $order_ids = array_unique(array((int) $from_order->id, (int) $order->id));
+        sort($order_ids, SORT_NUMERIC);
+        $locks = array();
         try {
-            foreach (FCIP_FluentCart_Order_Processor::sites($order->id) as $site) {
+            foreach ($order_ids as $id) {
+                $lock = 'fcip_fc_lock_' . $id;
+                if (!add_option($lock, current_time('mysql'), '', false)) {
+                    return;
+                }
+                $locks[] = $lock;
+            }
+            foreach (FCIP_FluentCart_Order_Processor::sites($from_order->id) as $site) {
                 $context = json_decode($site->source_data ?? '', true) ?: array();
-                if ((int) ($context['variation_id'] ?? 0) !== (int) $old['id']
+                if ((int) ($context['variation_id'] ?? 0) !== $old_variant_id
                     || !in_array($site->status, array('completed', 'success'), true)) {
                     continue;
                 }
@@ -114,18 +164,32 @@ class FCIP_FluentCart_Subscriptions {
                         $order->addLog('InstaWP plan change failed', $result->get_error_message(), 'error');
                         continue;
                     }
-                    FCIP_Sites_Model::update_plan($site->site_id, $plan_ids[0], array('order_id' => $order->id, 'product_id' => $new['post_id'], 'upgrade_response' => $result));
+                    if (!FCIP_Sites_Model::update_plan($site->site_id, $plan_ids[0], array('order_id' => $order->id, 'product_id' => $new['post_id'], 'upgrade_response' => $result))) {
+                        $order->addLog('InstaWP plan change tracking failed', 'The remote plan changed, but local tracking could not be saved.', 'error');
+                        continue;
+                    }
                 }
                 $context['variation_id'] = (int) $new['id'];
                 $replacement = \FluentCart\App\Models\Subscription::query()->where('parent_order_id', $order->id)->where('variation_id', $new['id'])->first();
                 if ($replacement) {
                     $context['subscription_id'] = (int) $replacement->id;
+                } elseif ((int) $order->id !== (int) $from_order->id) {
+                    $context['subscription_id'] = 0;
                 }
-                FCIP_Sites_Model::update($site->site_id, array('product_id' => $new['post_id'], 'source_data' => $context));
+                if ((int) $order->id !== (int) $from_order->id) {
+                    $context['upgraded_from_order_id'] = (int) $from_order->id;
+                    $context['item_id'] = $new['item_id'];
+                }
+                if (!FCIP_Sites_Model::update($site->site_id, array('order_id' => (int) $order->id, 'product_id' => $new['post_id'], 'source_data' => $context))) {
+                    $order->addLog('InstaWP plan change tracking failed', 'The site could not be linked to the upgrade order.', 'error');
+                    continue;
+                }
                 $order->addLog('InstaWP hosting plan changed', 'Plan: ' . $plan_ids[0]);
             }
         } finally {
-            delete_option('fcip_fc_lock_' . $order->id);
+            foreach ($locks as $lock) {
+                delete_option($lock);
+            }
         }
     }
 }

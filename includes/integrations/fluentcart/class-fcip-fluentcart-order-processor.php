@@ -32,7 +32,7 @@ class FCIP_FluentCart_Order_Processor {
 
     public function process_feed($order, $product_id, $feed, $feed_id) {
         $options = get_option('fcip_options', array());
-        if (!self::is_paid($order) || $order->type === 'renewal'
+        if (!self::is_paid($order) || $order->type === 'renewal' || $order->getMeta('_fcip_upgrade_from_order_id')
             || ($options['auto_create_sites_on_purchase'] ?? 'yes') !== 'yes'
             || ($options['enable_integration'] ?? 'yes') !== 'yes' || empty($options['api_key'])
             || empty($feed['snapshot_slug']) || ($feed['enabled'] ?? 'yes') !== 'yes') {
