@@ -346,7 +346,14 @@ class IWP_Service {
         }
         
         // Check current reservation status
-        $current_is_reserved = isset($site_details['is_reserved']) ? (bool) $site_details['is_reserved'] : false;
+        $details = $site_details['data'] ?? $site_details;
+        if (!is_array($details) || !array_key_exists('is_reserved', $details)) {
+            return new WP_Error('reservation_status_missing', __('Cannot determine the current site reservation status.', 'iwp-wp-integration'));
+        }
+        $current_is_reserved = filter_var($details['is_reserved'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($current_is_reserved === null) {
+            return new WP_Error('reservation_status_invalid', __('The site reservation status is invalid.', 'iwp-wp-integration'));
+        }
         $desired_is_reserved = (bool) $permanent;
         
         // If already in desired state, return current details
@@ -403,7 +410,7 @@ class IWP_Service {
                 $permanent ? __('permanent', 'iwp-wp-integration') : __('temporary', 'iwp-wp-integration')
             ),
             'site_id' => $site_id,
-            'is_reserved' => isset($toggle_result['is_reserved']) ? (bool) $toggle_result['is_reserved'] : $desired_is_reserved,
+            'is_reserved' => $desired_is_reserved,
             'changed' => true,
             'previous_status' => $current_is_reserved ? 'permanent' : 'temporary',
             'new_status' => $permanent ? 'permanent' : 'temporary',

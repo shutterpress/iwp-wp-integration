@@ -857,7 +857,7 @@ class IWP_Admin_Simple {
         $email_sent = $this->send_credentials_email($site);
 
         // Add order note if order exists
-        if (!empty($site->order_id)) {
+        if ($site->source === 'fluentcart' && !empty($site->order_id)) {
             $order = class_exists('FluentCart\App\Models\Order') ? \FluentCart\App\Models\Order::find($site->order_id) : null;
             if ($order) {
                 $order->addLog('InstaWP credentials released', $site->site_url ?: $site_id);
@@ -890,7 +890,7 @@ class IWP_Admin_Simple {
         $to = '';
 
         // Try order billing email first
-        if (!empty($site->order_id)) {
+        if ($site->source === 'fluentcart' && !empty($site->order_id)) {
             $order = class_exists('FluentCart\App\Models\Order') ? \FluentCart\App\Models\Order::find($site->order_id) : null;
             if ($order) {
                 $to = ($order->customer->email ?? '');

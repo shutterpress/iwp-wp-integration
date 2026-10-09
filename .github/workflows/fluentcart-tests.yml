@@ -21,6 +21,8 @@ jobs:
         run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: FluentCart behavior
         run: php tests/fluentcart.php
+      - name: Reservation behavior
+        run: php tests/reservations.php
       - name: Check removed commerce dependency
         run: '! grep -REn "IWP_Woo_|wc_get_|wcs_get_|woocommerce_|WC_Subscriptions|class_exists\(.WooCommerce" includes iwp-wp-integration.php assets'
       - name: JavaScript syntax
