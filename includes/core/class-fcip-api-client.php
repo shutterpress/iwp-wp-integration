@@ -1,9 +1,9 @@
 <?php
 /**
- * InstaWP API Client for InstaWP Integration
+ * InstaWP API Client for FluentCart InstaWP Provisioning
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,23 +12,23 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_API_Client class
+ * FCIP_API_Client class
  */
-class IWP_API_Client {
+class FCIP_API_Client {
 
     /**
      * API base URL
      *
      * @var string
      */
-    private $api_url = IWP_PLUGIN_APP_URL . '/api/v2/';
+    private $api_url = FCIP_PLUGIN_APP_URL . '/api/v2/';
 
     /**
-     * V1 API base URL (for legacy endpoints like domain mapping)
+     * V1 API base URL for domain mapping
      *
      * @var string
      */
-    private $api_url_v1 = IWP_PLUGIN_APP_URL . '/api/v1/';
+    private $api_url_v1 = FCIP_PLUGIN_APP_URL . '/api/v1/';
 
     /**
      * API key
@@ -48,7 +48,7 @@ class IWP_API_Client {
      * Constructor
      */
     public function __construct() {
-        $options = get_option('iwp_options', array());
+        $options = get_option('fcip_options', array());
         $this->api_key = isset($options['api_key']) ? $options['api_key'] : '';
         $this->team_id = isset($options['selected_team_id']) ? intval($options['selected_team_id']) : null;
     }
@@ -74,7 +74,7 @@ class IWP_API_Client {
         if (preg_match('/^(.+?) site name is not available\.?$/i', $message, $m)) {
             return sprintf(
                 /* translators: %s is the site name the customer tried to use. */
-                __('The site subdomain (%s) is already taken. Please choose a different one.', 'iwp-wp-integration'),
+                __('The site subdomain (%s) is already taken. Please choose a different one.', 'fluentcart-instawp-provisioning'),
                 $m[1]
             );
         }
@@ -83,16 +83,16 @@ class IWP_API_Client {
         // who have no InstaWP account and must not see InstaWP branding or
         // hosting-platform vocabulary ("CDN", "not hosted with us").
         if (stripos($message, 'does not have a CDN') !== false) {
-            return __('Cache clearing is not available on your current plan.', 'iwp-wp-integration');
+            return __('Cache clearing is not available on your current plan.', 'fluentcart-instawp-provisioning');
         }
 
         if (stripos($message, 'not hosted with') !== false
             || stripos($message, 'not allowed to perform') !== false) {
-            return __('Cache clearing is not available for this site.', 'iwp-wp-integration');
+            return __('Cache clearing is not available for this site.', 'fluentcart-instawp-provisioning');
         }
 
         if (stripos($message, 'Server error') !== false) {
-            return __('We could not clear the cache just now. Please try again in a few minutes.', 'iwp-wp-integration');
+            return __('We could not clear the cache just now. Please try again in a few minutes.', 'fluentcart-instawp-provisioning');
         }
 
         return $message;
@@ -143,8 +143,8 @@ class IWP_API_Client {
      */
     private function make_request($endpoint, $args = array()) {
         if (empty($this->api_key)) {
-            IWP_Logger::error('API key is empty', 'api-client');
-            return new WP_Error('no_api_key', __('API key is required', 'iwp-wp-integration'));
+            FCIP_Logger::error('API key is empty', 'api-client');
+            return new WP_Error('no_api_key', __('API key is required', 'fluentcart-instawp-provisioning'));
         }
 
         $url = rtrim($this->api_url, '/') . '/' . ltrim($endpoint, '/');
@@ -166,19 +166,19 @@ class IWP_API_Client {
 
         $args = wp_parse_args($args, $default_args);
 
-        // Log the request in full. IWP_Logger drops the whole entry if the
+        // Log the request in full. FCIP_Logger drops the whole entry if the
         // payload carries a credential-bearing key, so no filtering is done
         // here.
-        IWP_Logger::debug('Making API request', 'api-client', array('url' => $url));
-        IWP_Logger::debug('Request args', 'api-client', $args);
+        FCIP_Logger::debug('Making API request', 'api-client', array('url' => $url));
+        FCIP_Logger::debug('Request args', 'api-client', $args);
 
         $response = wp_remote_request($url, $args);
 
         // Log the response in errorlog
-        IWP_Logger::debug('Raw API response received', 'api-client');
+        FCIP_Logger::debug('Raw API response received', 'api-client');
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('API request failed with WP_Error', 'api-client', array('error' => $response->get_error_message()));
+            FCIP_Logger::error('API request failed with WP_Error', 'api-client', array('error' => $response->get_error_message()));
             return $response;
         }
 
@@ -189,13 +189,13 @@ class IWP_API_Client {
         // Log the response details. Headers come back as a case-insensitive
         // dictionary from the real transport but can be a plain array from a
         // filtered or mocked response, so do not assume getAll() exists.
-        IWP_Logger::debug('API response code', 'api-client', array('code' => $response_code));
+        FCIP_Logger::debug('API response code', 'api-client', array('code' => $response_code));
         if (is_object($response_headers) && method_exists($response_headers, 'getAll')) {
-            IWP_Logger::debug('API response headers', 'api-client', $response_headers->getAll());
+            FCIP_Logger::debug('API response headers', 'api-client', $response_headers->getAll());
         } elseif (is_array($response_headers)) {
-            IWP_Logger::debug('API response headers', 'api-client', $response_headers);
+            FCIP_Logger::debug('API response headers', 'api-client', $response_headers);
         }
-        IWP_Logger::debug('API response body received', 'api-client');
+        FCIP_Logger::debug('API response body received', 'api-client');
 
         if ($response_code < 200 || $response_code >= 300) {
             // Prefer the upstream body message — it's already a human-readable
@@ -206,14 +206,14 @@ class IWP_API_Client {
                 $error_message = sanitize_text_field($body_data['message']);
             } else {
                 $error_message = sprintf(
-                    __('API request failed with status code %d', 'iwp-wp-integration'),
+                    __('API request failed with status code %d', 'fluentcart-instawp-provisioning'),
                     $response_code
                 );
             }
 
             // Log the RAW upstream message so support / debug context
             // still captures exactly what the API said.
-            IWP_Logger::error('API request failed', 'api-client', array(
+            FCIP_Logger::error('API request failed', 'api-client', array(
                 'status_code' => $response_code,
                 'error'       => $error_message,
             ));
@@ -228,11 +228,11 @@ class IWP_API_Client {
         $data = json_decode($response_body, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
-            IWP_Logger::error('JSON decode error', 'api-client', array('error' => json_last_error_msg()));
-            return new WP_Error('json_decode_error', __('Invalid JSON response', 'iwp-wp-integration'));
+            FCIP_Logger::error('JSON decode error', 'api-client', array('error' => json_last_error_msg()));
+            return new WP_Error('json_decode_error', __('Invalid JSON response', 'fluentcart-instawp-provisioning'));
         }
 
-        IWP_Logger::debug('API request successful', 'api-client', $data);
+        FCIP_Logger::debug('API request successful', 'api-client', $data);
         return $data;
     }
 
@@ -243,18 +243,18 @@ class IWP_API_Client {
      */
     public function get_snapshots() {
         // Use team-specific cache key if team is selected
-        $cache_key = $this->team_id ? 'iwp_snapshots_team_' . $this->team_id : 'iwp_snapshots';
+        $cache_key = $this->team_id ? 'fcip_snapshots_team_' . $this->team_id : 'fcip_snapshots';
 
-        IWP_Logger::debug('get_snapshots() called', 'api-client', array('team_id' => $this->team_id, 'cache_key' => $cache_key));
+        FCIP_Logger::debug('get_snapshots() called', 'api-client', array('team_id' => $this->team_id, 'cache_key' => $cache_key));
 
         $cached_snapshots = get_transient($cache_key);
 
         if (false !== $cached_snapshots) {
-            IWP_Logger::debug('Using cached snapshots data', 'api-client', array('cache_key' => $cache_key));
+            FCIP_Logger::debug('Using cached snapshots data', 'api-client', array('cache_key' => $cache_key));
             return $cached_snapshots;
         }
 
-        IWP_Logger::debug('No cached snapshots found, making API request', 'api-client', array('cache_key' => $cache_key));
+        FCIP_Logger::debug('No cached snapshots found, making API request', 'api-client', array('cache_key' => $cache_key));
 
         // Fetch all pages of snapshots (API defaults to 10 per page)
         $all_snapshots = array();
@@ -267,7 +267,7 @@ class IWP_API_Client {
             ));
 
             if (is_wp_error($response)) {
-                IWP_Logger::error('get_snapshots() failed', 'api-client', array('error' => $response->get_error_message(), 'page' => $page));
+                FCIP_Logger::error('get_snapshots() failed', 'api-client', array('error' => $response->get_error_message(), 'page' => $page));
                 return $response;
             }
 
@@ -284,14 +284,14 @@ class IWP_API_Client {
                     $last_page = $page; // No pagination info, assume single page
                 }
             } else {
-                // Legacy response format
+                // Flat API response format
                 $page_snapshots = is_array($response) ? $response : array();
                 $last_page = $page;
             }
 
             $all_snapshots = array_merge($all_snapshots, $page_snapshots);
 
-            IWP_Logger::debug('Fetched snapshots page', 'api-client', array(
+            FCIP_Logger::debug('Fetched snapshots page', 'api-client', array(
                 'page' => $page,
                 'last_page' => $last_page,
                 'count_this_page' => count($page_snapshots),
@@ -302,9 +302,9 @@ class IWP_API_Client {
         } while ($page <= $last_page && $page <= $max_pages);
 
         // Cache for configurable duration (default 15 minutes)
-        $cache_duration = apply_filters('iwp_snapshots_cache_duration', 4 * HOUR_IN_SECONDS);
+        $cache_duration = apply_filters('fcip_snapshots_cache_duration', 4 * HOUR_IN_SECONDS);
         set_transient($cache_key, $all_snapshots, $cache_duration);
-        IWP_Logger::info('Snapshots cached', 'api-client', array('cache_key' => $cache_key, 'duration_minutes' => $cache_duration / 60, 'total_snapshots' => count($all_snapshots)));
+        FCIP_Logger::info('Snapshots cached', 'api-client', array('cache_key' => $cache_key, 'duration_minutes' => $cache_duration / 60, 'total_snapshots' => count($all_snapshots)));
 
         return $all_snapshots;
     }
@@ -315,12 +315,12 @@ class IWP_API_Client {
     public function clear_snapshots_cache() {
         // Clear team-specific cache if team is selected
         if ($this->team_id) {
-            $cache_key = 'iwp_snapshots_team_' . $this->team_id;
+            $cache_key = 'fcip_snapshots_team_' . $this->team_id;
             delete_transient($cache_key);
-            IWP_Logger::debug('Team-specific snapshots cache cleared', 'api-client', array('cache_key' => $cache_key));
+            FCIP_Logger::debug('Team-specific snapshots cache cleared', 'api-client', array('cache_key' => $cache_key));
         } else {
-            delete_transient('iwp_snapshots');
-            IWP_Logger::debug('Default snapshots cache cleared', 'api-client');
+            delete_transient('fcip_snapshots');
+            FCIP_Logger::debug('Default snapshots cache cleared', 'api-client');
         }
     }
 
@@ -330,18 +330,18 @@ class IWP_API_Client {
      * @return bool|WP_Error
      */
     public function test_connection() {
-        IWP_Logger::debug('Testing API connection', 'api-client');
+        FCIP_Logger::debug('Testing API connection', 'api-client');
         
         $response = $this->make_request('snapshots', array(
             'method' => 'GET',
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Connection test failed', 'api-client', array('error' => $response->get_error_message()));
+            FCIP_Logger::error('Connection test failed', 'api-client', array('error' => $response->get_error_message()));
             return $response;
         }
 
-        IWP_Logger::info('Connection test successful', 'api-client');
+        FCIP_Logger::info('Connection test successful', 'api-client');
         return true;
     }
 
@@ -352,37 +352,37 @@ class IWP_API_Client {
      */
     public function get_plans() {
         // Use team-specific cache key if team is selected
-        $cache_key = $this->team_id ? 'iwp_plans_team_' . $this->team_id : 'iwp_plans';
+        $cache_key = $this->team_id ? 'fcip_plans_team_' . $this->team_id : 'fcip_plans';
         $cached_plans = get_transient($cache_key);
         
         if ($cached_plans !== false) {
-            IWP_Logger::debug('Using cached plans data', 'api-client', array('cache_key' => $cache_key));
+            FCIP_Logger::debug('Using cached plans data', 'api-client', array('cache_key' => $cache_key));
             return $cached_plans;
         }
 
-        IWP_Logger::debug('Fetching plans from API', 'api-client', array('cache_key' => $cache_key));
+        FCIP_Logger::debug('Fetching plans from API', 'api-client', array('cache_key' => $cache_key));
         
         $response = $this->make_request('get-plans?product_type=sites', array(
             'method' => 'GET',
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to fetch plans', 'api-client', array('error' => $response->get_error_message()));
+            FCIP_Logger::error('Failed to fetch plans', 'api-client', array('error' => $response->get_error_message()));
             return $response;
         }
 
         // Handle new API response format with status, message, and data fields
         if (isset($response['data']) && is_array($response['data'])) {
             $plans_data = $response['data'];
-            IWP_Logger::debug('Using plans from data field', 'api-client', array('status' => $response['status'] ?? 'unknown', 'message' => $response['message'] ?? 'no message'));
+            FCIP_Logger::debug('Using plans from data field', 'api-client', array('status' => $response['status'] ?? 'unknown', 'message' => $response['message'] ?? 'no message'));
         } else {
-            // Fallback for legacy response format
+            // Fallback for flat response format
             $plans_data = $response;
-            IWP_Logger::debug('Using legacy plans response format', 'api-client');
+            FCIP_Logger::debug('Using flat plans response format', 'api-client');
         }
 
         // Cache for configurable duration (default 1 hour)
-        $cache_duration = apply_filters('iwp_plans_cache_duration', HOUR_IN_SECONDS);
+        $cache_duration = apply_filters('fcip_plans_cache_duration', HOUR_IN_SECONDS);
         set_transient($cache_key, $plans_data, $cache_duration);
         
         // Count plans from the data
@@ -391,7 +391,7 @@ class IWP_API_Client {
             $plan_count = count($plans_data);
         }
         
-        IWP_Logger::info('Successfully fetched plans', 'api-client', array('count' => $plan_count, 'cache_key' => $cache_key));
+        FCIP_Logger::info('Successfully fetched plans', 'api-client', array('count' => $plan_count, 'cache_key' => $cache_key));
         return $plans_data;
     }
 
@@ -403,7 +403,7 @@ class IWP_API_Client {
      */
     public function get_plan($plan_id) {
         if (empty($plan_id)) {
-            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'fluentcart-instawp-provisioning'));
         }
         
         $response = $this->make_request('plans/' . sanitize_text_field($plan_id), array(
@@ -419,34 +419,34 @@ class IWP_API_Client {
      * @return array|WP_Error
      */
     public function get_teams() {
-        $cached_teams = get_transient('iwp_teams');
+        $cached_teams = get_transient('fcip_teams');
         
         if (false !== $cached_teams) {
-            IWP_Logger::debug('Using cached teams data', 'api-client');
+            FCIP_Logger::debug('Using cached teams data', 'api-client');
             return $cached_teams;
         }
 
-        IWP_Logger::debug('Fetching teams from API', 'api-client');
+        FCIP_Logger::debug('Fetching teams from API', 'api-client');
         
         $response = $this->make_request('teams', array(
             'method' => 'GET',
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to fetch teams', 'api-client', array('error' => $response->get_error_message()));
+            FCIP_Logger::error('Failed to fetch teams', 'api-client', array('error' => $response->get_error_message()));
             return $response;
         }
 
         // Cache for configurable duration (default 1 hour)
-        $cache_duration = apply_filters('iwp_teams_cache_duration', HOUR_IN_SECONDS);
-        set_transient('iwp_teams', $response, $cache_duration);
+        $cache_duration = apply_filters('fcip_teams_cache_duration', HOUR_IN_SECONDS);
+        set_transient('fcip_teams', $response, $cache_duration);
         
         $team_count = 0;
         if (isset($response['data']) && is_array($response['data'])) {
             $team_count = count($response['data']);
         }
         
-        IWP_Logger::info('Successfully fetched teams', 'api-client', array('count' => $team_count));
+        FCIP_Logger::info('Successfully fetched teams', 'api-client', array('count' => $team_count));
         return $response;
     }
 
@@ -458,7 +458,7 @@ class IWP_API_Client {
      */
     public function get_snapshot($snapshot_slug) {
         if (empty($snapshot_slug)) {
-            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'fluentcart-instawp-provisioning'));
         }
 
         $response = $this->make_request('snapshots/' . sanitize_text_field($snapshot_slug), array(
@@ -478,7 +478,7 @@ class IWP_API_Client {
      */
     public function create_site_from_snapshot($snapshot_slug, $site_data = array(), $plan_id = '') {
         if (empty($snapshot_slug)) {
-            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'fluentcart-instawp-provisioning'));
         }
 
         $default_data = array(
@@ -533,7 +533,7 @@ class IWP_API_Client {
      */
     public function get_task_status($task_id) {
         if (empty($task_id)) {
-            return new WP_Error('invalid_task_id', __('Task ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_task_id', __('Task ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         $response = $this->make_request('tasks/' . sanitize_text_field($task_id) . '/status', array(
@@ -552,18 +552,18 @@ class IWP_API_Client {
      */
     public function upgrade_site_plan($site_id, $plan_id) {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         if (empty($plan_id)) {
-            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         $upgrade_data = array(
             'plan_id' => sanitize_text_field($plan_id)
         );
 
-        IWP_Logger::info('Upgrading site plan', 'api-client', array('site_id' => $site_id, 'plan_id' => $plan_id));
+        FCIP_Logger::info('Upgrading site plan', 'api-client', array('site_id' => $site_id, 'plan_id' => $plan_id));
 
         $response = $this->make_request('sites/' . intval($site_id) . '/upgrade-plan', array(
             'method' => 'POST',
@@ -571,23 +571,23 @@ class IWP_API_Client {
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Site plan upgrade failed', 'api-client', array('site_id' => $site_id, 'error' => $response->get_error_message()));
+            FCIP_Logger::error('Site plan upgrade failed', 'api-client', array('site_id' => $site_id, 'error' => $response->get_error_message()));
             return $response;
         }
 
-        IWP_Logger::info('Site plan upgrade successful, fetching updated site details', 'api-client', array('site_id' => $site_id));
+        FCIP_Logger::info('Site plan upgrade successful, fetching updated site details', 'api-client', array('site_id' => $site_id));
 
         // Fetch complete site details after successful upgrade
         $site_details = $this->get_site_details($site_id);
 
         if (is_wp_error($site_details)) {
-            IWP_Logger::warning('Failed to fetch site details after upgrade', 'api-client', array('site_id' => $site_id, 'error' => $site_details->get_error_message()));
+            FCIP_Logger::warning('Failed to fetch site details after upgrade', 'api-client', array('site_id' => $site_id, 'error' => $site_details->get_error_message()));
             // Return upgrade response even if site details fetch fails
             $response['site_details_error'] = $site_details->get_error_message();
         } else {
             // Merge site details into the upgrade response
             $response['site_details'] = $site_details;
-            IWP_Logger::debug('Fetched site details after upgrade', 'api-client', array('site_id' => $site_id));
+            FCIP_Logger::debug('Fetched site details after upgrade', 'api-client', array('site_id' => $site_id));
         }
 
         return $response;
@@ -595,7 +595,7 @@ class IWP_API_Client {
 
     /**
      * Flatten a GET /sites/{id} response envelope into the flat column names
-     * used by IWP_Sites_Model.
+     * used by FCIP_Sites_Model.
      *
      * The envelope shape is { status, message, data: { url, site_meta: {
      * wp_username, wp_password, ... }, hash, ... } }. Credentials live under
@@ -681,19 +681,19 @@ class IWP_API_Client {
      */
     public function get_site_details($site_id) {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
-        IWP_Logger::debug('Fetching site details', 'api-client', array('site_id' => $site_id));
+        FCIP_Logger::debug('Fetching site details', 'api-client', array('site_id' => $site_id));
 
         $response = $this->make_request('sites/' . intval($site_id), array(
             'method' => 'GET',
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to fetch site details', 'api-client', array('site_id' => $site_id, 'error' => $response->get_error_message()));
+            FCIP_Logger::error('Failed to fetch site details', 'api-client', array('site_id' => $site_id, 'error' => $response->get_error_message()));
         } else {
-            IWP_Logger::debug('Fetched site details', 'api-client', array('site_id' => $site_id));
+            FCIP_Logger::debug('Fetched site details', 'api-client', array('site_id' => $site_id));
         }
 
         return $response;
@@ -709,11 +709,11 @@ class IWP_API_Client {
      */
     public function add_domain_to_site($site_id, $domain_name, $type = 'primary') {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         if (empty($domain_name)) {
-            return new WP_Error('invalid_domain', __('Domain name is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_domain', __('Domain name is required', 'fluentcart-instawp-provisioning'));
         }
 
         if (!in_array($type, ['primary', 'alias'])) {
@@ -727,7 +727,7 @@ class IWP_API_Client {
             'route_www' => false
         );
 
-        IWP_Logger::info('Adding domain to site', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name, 'type' => $type));
+        FCIP_Logger::info('Adding domain to site', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name, 'type' => $type));
 
         // Use v1 API for domain mapping
         $endpoint = 'site/add-domain/' . intval($site_id);
@@ -745,11 +745,11 @@ class IWP_API_Client {
         $this->api_url = $original_url;
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Domain mapping failed', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name, 'error' => $response->get_error_message()));
+            FCIP_Logger::error('Domain mapping failed', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name, 'error' => $response->get_error_message()));
             return $response;
         }
 
-        IWP_Logger::info('Domain mapping successful', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name));
+        FCIP_Logger::info('Domain mapping successful', 'api-client', array('site_id' => $site_id, 'domain' => $domain_name));
         return $response;
     }
 
@@ -762,14 +762,14 @@ class IWP_API_Client {
      */
     public function disable_demo_helper($site_id, $site_url = '') {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         // If no site URL provided, try to get it from site details
         if (empty($site_url)) {
             $site_details = $this->get_site_details($site_id);
             if (is_wp_error($site_details)) {
-                IWP_Logger::warning('Could not get site details for demo helper disable', 'api-client', array(
+                FCIP_Logger::warning('Could not get site details for demo helper disable', 'api-client', array(
                     'site_id' => $site_id,
                     'error' => $site_details->get_error_message()
                 ));
@@ -778,14 +778,14 @@ class IWP_API_Client {
             
             $site_url = $site_details['data']['url'] ?? '';
             if (empty($site_url)) {
-                return new WP_Error('no_site_url', __('Could not determine site URL for demo helper disable', 'iwp-wp-integration'));
+                return new WP_Error('no_site_url', __('Could not determine site URL for demo helper disable', 'fluentcart-instawp-provisioning'));
             }
         }
 
         // Construct the demo helper disable endpoint
-        $demo_helper_url = trailingslashit($site_url) . 'wp-json/iwp-demo-helper/v1/disable';
+        $demo_helper_url = trailingslashit($site_url) . 'wp-json/fcip-demo-helper/v1/disable';
 
-        IWP_Logger::info('Disabling demo helper plugin', 'api-client', array(
+        FCIP_Logger::info('Disabling demo helper plugin', 'api-client', array(
             'site_id' => $site_id,
             'site_url' => $site_url,
             'endpoint' => $demo_helper_url
@@ -796,17 +796,17 @@ class IWP_API_Client {
             'timeout' => 30,
             'headers' => array(
                 'Content-Type' => 'application/json',
-                'User-Agent' => 'InstaWP-Integration/' . IWP_VERSION
+                'User-Agent' => 'FluentCart-InstaWP-Provisioning/' . FCIP_VERSION
             ),
             'body' => wp_json_encode(array(
-                'source' => 'instawp-integration',
+                'source' => 'fluentcart-instawp-provisioning',
                 'site_id' => $site_id,
                 'timestamp' => current_time('timestamp')
             ))
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to disable demo helper - network error', 'api-client', array(
+            FCIP_Logger::error('Failed to disable demo helper - network error', 'api-client', array(
                 'site_id' => $site_id,
                 'site_url' => $site_url,
                 'error' => $response->get_error_message()
@@ -818,7 +818,7 @@ class IWP_API_Client {
         $response_body = wp_remote_retrieve_body($response);
 
         if ($response_code === 200) {
-            IWP_Logger::info('Successfully disabled demo helper plugin', 'api-client', array(
+            FCIP_Logger::info('Successfully disabled demo helper plugin', 'api-client', array(
                 'site_id' => $site_id,
                 'site_url' => $site_url,
                 'response' => $response_body
@@ -831,7 +831,7 @@ class IWP_API_Client {
             );
         } elseif ($response_code === 404) {
             // Plugin not installed or endpoint not found - this is expected and not an error
-            IWP_Logger::info('Demo helper plugin not found (expected)', 'api-client', array(
+            FCIP_Logger::info('Demo helper plugin not found (expected)', 'api-client', array(
                 'site_id' => $site_id,
                 'site_url' => $site_url,
                 'response_code' => $response_code
@@ -844,7 +844,7 @@ class IWP_API_Client {
             );
         } else {
             // Other HTTP error codes
-            IWP_Logger::warning('Demo helper disable returned non-success code', 'api-client', array(
+            FCIP_Logger::warning('Demo helper disable returned non-success code', 'api-client', array(
                 'site_id' => $site_id,
                 'site_url' => $site_url,
                 'response_code' => $response_code,
@@ -852,7 +852,7 @@ class IWP_API_Client {
             ));
             
             return new WP_Error('demo_helper_error', sprintf(
-                __('Demo helper disable failed with code %d: %s', 'iwp-wp-integration'),
+                __('Demo helper disable failed with code %d: %s', 'fluentcart-instawp-provisioning'),
                 $response_code,
                 $response_body
             ));
@@ -867,13 +867,13 @@ class IWP_API_Client {
      */
     public function delete_site($site_id) {
         if (empty($site_id)) {
-            return new WP_Error('invalid_site_id', __('Site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         // Support both numeric and hash site IDs
         $sanitized_site_id = is_numeric($site_id) ? intval($site_id) : sanitize_text_field($site_id);
 
-        IWP_Logger::info('Deleting site', 'api-client', array('site_id' => $sanitized_site_id));
+        FCIP_Logger::info('Deleting site', 'api-client', array('site_id' => $sanitized_site_id));
 
         $endpoint = 'sites/' . $sanitized_site_id;
         
@@ -882,14 +882,14 @@ class IWP_API_Client {
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Site deletion failed', 'api-client', array(
+            FCIP_Logger::error('Site deletion failed', 'api-client', array(
                 'site_id' => $sanitized_site_id,
                 'error' => $response->get_error_message()
             ));
             return $response;
         }
 
-        IWP_Logger::info('Site deletion successful', 'api-client', array('site_id' => $sanitized_site_id));
+        FCIP_Logger::info('Site deletion successful', 'api-client', array('site_id' => $sanitized_site_id));
         return $response;
     }
 
@@ -901,13 +901,13 @@ class IWP_API_Client {
      */
     public function toggle_site_reservation($site_id) {
         if (empty($site_id)) {
-            return new WP_Error('invalid_site_id', __('Site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         // Support both numeric and hash site IDs
         $sanitized_site_id = is_numeric($site_id) ? intval($site_id) : sanitize_text_field($site_id);
 
-        IWP_Logger::info('Toggling site reservation status', 'api-client', array('site_id' => $sanitized_site_id));
+        FCIP_Logger::info('Toggling site reservation status', 'api-client', array('site_id' => $sanitized_site_id));
 
         $endpoint = 'sites/' . $sanitized_site_id . '/reserve-toggle';
         
@@ -916,14 +916,14 @@ class IWP_API_Client {
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Site reservation toggle failed', 'api-client', array(
+            FCIP_Logger::error('Site reservation toggle failed', 'api-client', array(
                 'site_id' => $sanitized_site_id,
                 'error' => $response->get_error_message()
             ));
             return $response;
         }
 
-        IWP_Logger::info('Site reservation toggle successful', 'api-client', array(
+        FCIP_Logger::info('Site reservation toggle successful', 'api-client', array(
             'site_id' => $sanitized_site_id,
             'new_status' => isset($response['is_reserved']) ? ($response['is_reserved'] ? 'permanent' : 'temporary') : 'unknown'
         ));
@@ -943,13 +943,13 @@ class IWP_API_Client {
      */
     public function purge_site_cache($site_id) {
         if (empty($site_id)) {
-            return new WP_Error('invalid_site_id', __('Site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('invalid_site_id', __('Site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         // Support both numeric and hash site IDs
         $sanitized_site_id = is_numeric($site_id) ? intval($site_id) : sanitize_text_field($site_id);
 
-        IWP_Logger::info('Purging site cache', 'api-client', array('site_id' => $sanitized_site_id));
+        FCIP_Logger::info('Purging site cache', 'api-client', array('site_id' => $sanitized_site_id));
 
         $endpoint = 'sites/' . $sanitized_site_id . '/purge-cache';
 
@@ -961,42 +961,23 @@ class IWP_API_Client {
             // make_request() returns WP_Error rather than throwing, but a fatal
             // anywhere beneath it (HTTP transport, JSON handling) must not take
             // the whole request down -- degrade to the WP_Error callers expect.
-            IWP_Logger::error('Site cache purge threw an exception', 'api-client', array(
+            FCIP_Logger::error('Site cache purge threw an exception', 'api-client', array(
                 'site_id' => $sanitized_site_id,
                 'error' => $e->getMessage()
             ));
-            return new WP_Error('purge_cache_failed', __('Server error, please re-try later.', 'iwp-wp-integration'));
+            return new WP_Error('purge_cache_failed', __('Server error, please re-try later.', 'fluentcart-instawp-provisioning'));
         }
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Site cache purge failed', 'api-client', array(
+            FCIP_Logger::error('Site cache purge failed', 'api-client', array(
                 'site_id' => $sanitized_site_id,
                 'error' => $response->get_error_message()
             ));
             return $response;
         }
 
-        IWP_Logger::info('Site cache purge successful', 'api-client', array('site_id' => $sanitized_site_id));
+        FCIP_Logger::info('Site cache purge successful', 'api-client', array('site_id' => $sanitized_site_id));
         return $response;
-    }
-
-    /**
-     * Backward compatibility: Get templates (alias for get_snapshots)
-     *
-     * @return array|WP_Error
-     * @deprecated Use get_snapshots() instead
-     */
-    public function get_templates() {
-        return $this->get_snapshots();
-    }
-
-    /**
-     * Backward compatibility: Clear templates cache (alias for clear_snapshots_cache)
-     *
-     * @deprecated Use clear_snapshots_cache() instead
-     */
-    public function clear_templates_cache() {
-        return $this->clear_snapshots_cache();
     }
 
     /**
@@ -1008,11 +989,11 @@ class IWP_API_Client {
      */
     public function update_site($site_id, $post_options = array()) {
         if (empty($site_id)) {
-            return new WP_Error('missing_site_id', __('Site ID is required', 'iwp-wp-integration'));
+            return new WP_Error('missing_site_id', __('Site ID is required', 'fluentcart-instawp-provisioning'));
         }
 
         if (empty($this->api_key)) {
-            return new WP_Error('no_api_key', __('API key not configured', 'iwp-wp-integration'));
+            return new WP_Error('no_api_key', __('API key not configured', 'fluentcart-instawp-provisioning'));
         }
 
         $endpoint = 'sites/' . intval($site_id);
@@ -1026,7 +1007,7 @@ class IWP_API_Client {
             );
         }
 
-        IWP_Logger::info('Preparing site update request', 'api-client', array(
+        FCIP_Logger::info('Preparing site update request', 'api-client', array(
             'site_id' => $site_id,
             'endpoint' => $endpoint,
             'post_options' => $post_options
@@ -1039,43 +1020,20 @@ class IWP_API_Client {
         ));
 
         if (is_wp_error($response)) {
-            IWP_Logger::error('Site update request failed', 'api-client', array(
+            FCIP_Logger::error('Site update request failed', 'api-client', array(
                 'site_id' => $site_id,
                 'error' => $response->get_error_message()
             ));
             return $response;
         }
 
-        IWP_Logger::info('Site updated successfully', 'api-client', array(
+        FCIP_Logger::info('Site updated successfully', 'api-client', array(
             'site_id' => $site_id,
             'post_options' => !empty($post_options),
             'response_keys' => is_array($response) ? array_keys($response) : 'not_array'
         ));
 
         return $response;
-    }
-
-    /**
-     * Backward compatibility: Get template (alias for get_snapshot)
-     *
-     * @param string $template_slug
-     * @return array|WP_Error
-     * @deprecated Use get_snapshot() instead
-     */
-    public function get_template($template_slug) {
-        return $this->get_snapshot($template_slug);
-    }
-
-    /**
-     * Backward compatibility: Create site from template (alias for create_site_from_snapshot)
-     *
-     * @param string $template_slug
-     * @param array $site_data
-     * @return array|WP_Error
-     * @deprecated Use create_site_from_snapshot() instead
-     */
-    public function create_site_from_template($template_slug, $site_data = array()) {
-        return $this->create_site_from_snapshot($template_slug, $site_data);
     }
 
     /**
@@ -1090,7 +1048,7 @@ class IWP_API_Client {
             return;
         }
 
-        $options = get_option('iwp_options', array());
+        $options = get_option('fcip_options', array());
         $debug_mode = isset($options['debug_mode']) ? $options['debug_mode'] : 'no';
 
         if ($debug_mode !== 'yes') {
@@ -1104,6 +1062,6 @@ class IWP_API_Client {
             'timestamp' => current_time('mysql'),
         );
 
-        IWP_Logger::debug('API request', 'api-client', $log_data);
+        FCIP_Logger::debug('API request', 'api-client', $log_data);
     }
 }

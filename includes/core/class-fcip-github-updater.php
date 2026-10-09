@@ -5,15 +5,15 @@
  * Checks GitHub releases for new versions and integrates with
  * WordPress's built-in plugin update system.
  *
- * @package IWP
- * @since 0.0.4
+ * @package FCIP
+ * @since 1.0.0
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-class IWP_GitHub_Updater {
+class FCIP_GitHub_Updater {
 
     /**
      * GitHub repository owner/name
@@ -54,9 +54,9 @@ class IWP_GitHub_Updater {
      * Constructor
      */
     public function __construct() {
-        $this->plugin_slug    = 'iwp-wp-integration';
-        $this->current_version = IWP_VERSION;
-        $this->plugin_basename = IWP_PLUGIN_BASENAME;
+        $this->plugin_slug    = 'fluentcart-instawp-provisioning';
+        $this->current_version = FCIP_VERSION;
+        $this->plugin_basename = FCIP_PLUGIN_BASENAME;
 
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_update'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
@@ -80,7 +80,7 @@ class IWP_GitHub_Updater {
         }
 
         // Check transient cache first (15 min)
-        $cached = get_transient('iwp_github_release_shutterpress');
+        $cached = get_transient('fcip_github_release_shutterpress');
         if ($cached !== false) {
             $this->github_response = $cached;
             return $this->github_response;
@@ -108,7 +108,7 @@ class IWP_GitHub_Updater {
         }
 
         $this->github_response = $body;
-        set_transient('iwp_github_release_shutterpress', $body, 15 * MINUTE_IN_SECONDS);
+        set_transient('fcip_github_release_shutterpress', $body, 15 * MINUTE_IN_SECONDS);
 
         return $this->github_response;
     }
@@ -133,14 +133,14 @@ class IWP_GitHub_Updater {
         // First look for a .zip asset (built by GitHub Actions)
         if (!empty($release->assets)) {
             foreach ($release->assets as $asset) {
-                if (substr($asset->name, -4) === '.zip') {
+                if ($asset->name === $this->plugin_slug . '-' . $this->tag_to_version($release->tag_name) . '.zip') {
                     return $asset->browser_download_url;
                 }
             }
         }
 
-        // Fall back to the source zipball
-        return $release->zipball_url;
+        return '';
+
     }
 
     /**
@@ -156,7 +156,7 @@ class IWP_GitHub_Updater {
 
         $release = $this->get_github_release();
 
-        if (!$release) {
+        if (!$release || !$this->get_download_url($release)) {
             return $transient;
         }
 
@@ -196,12 +196,12 @@ class IWP_GitHub_Updater {
         }
 
         $release = $this->get_github_release();
-        if (!$release) {
+        if (!$release || !$this->get_download_url($release)) {
             return $result;
         }
 
         $info = new stdClass();
-        $info->name          = 'InstaWP Integration';
+        $info->name          = 'FluentCart InstaWP Provisioning';
         $info->slug          = $this->plugin_slug;
         $info->version       = $this->tag_to_version($release->tag_name);
         $info->author        = '<a href="https://instawp.com">InstaWP</a>';
@@ -215,7 +215,7 @@ class IWP_GitHub_Updater {
 
         // Use release body as changelog (markdown)
         $info->sections = array(
-            'description' => 'InstaWP Integration plugin for WordPress and FluentCart.',
+            'description' => 'FluentCart InstaWP Provisioning plugin for WordPress and FluentCart.',
             'changelog'   => nl2br(esc_html($release->body)),
         );
 
@@ -237,12 +237,12 @@ class IWP_GitHub_Updater {
 
         global $wp_filesystem;
 
-        $install_dir = plugin_dir_path(IWP_PLUGIN_FILE);
+        $install_dir = plugin_dir_path(FCIP_PLUGIN_FILE);
         $wp_filesystem->move($result['destination'], $install_dir);
         $result['destination'] = $install_dir;
 
         // Clear update transient so WP re-checks
-        delete_transient('iwp_github_release_shutterpress');
+        delete_transient('fcip_github_release_shutterpress');
 
         return $result;
     }
@@ -265,10 +265,10 @@ class IWP_GitHub_Updater {
         $check_update_link = sprintf(
             '<a href="%s">%s</a>',
             esc_url(wp_nonce_url(
-                add_query_arg('iwp_check_update', '1', admin_url('plugins.php')),
-                'iwp_check_update'
+                add_query_arg('fcip_check_update', '1', admin_url('plugins.php')),
+                'fcip_check_update'
             )),
-            esc_html__('Check for Updates', 'iwp-wp-integration')
+            esc_html__('Check for Updates', 'fluentcart-instawp-provisioning')
         );
 
         array_unshift($links, $check_update_link);
@@ -286,7 +286,7 @@ class IWP_GitHub_Updater {
      * @return void
      */
     public function handle_manual_update_check() {
-        if (empty($_GET['iwp_check_update'])) {
+        if (empty($_GET['fcip_check_update'])) {
             return;
         }
 
@@ -297,10 +297,10 @@ class IWP_GitHub_Updater {
                 return;
             }
 
-            check_admin_referer('iwp_check_update');
+            check_admin_referer('fcip_check_update');
 
             // Bust the 15-minute GitHub cache so the check hits the API again.
-            delete_transient('iwp_github_release_shutterpress');
+            delete_transient('fcip_github_release_shutterpress');
 
             // Bust WP's own cache so wp_update_plugins() doesn't short-circuit on its timeout.
             delete_site_transient('update_plugins');
@@ -310,7 +310,7 @@ class IWP_GitHub_Updater {
             // aborts via wp_die(), which throws WPDieException when the wp_die
             // handler is filtered - keeping the redirect inside the try means a
             // caught failure can never show the success notice.
-            wp_safe_redirect(add_query_arg('iwp_update_checked', '1', admin_url('plugins.php')));
+            wp_safe_redirect(add_query_arg('fcip_update_checked', '1', admin_url('plugins.php')));
 
             // Hand control back rather than exiting; the 302 is already sent,
             // so the browser follows it and the rest of the request is moot.
@@ -318,8 +318,8 @@ class IWP_GitHub_Updater {
         } catch (\Throwable $e) {
             // Log and fall through: plugins.php still renders normally, just
             // without the confirmation notice.
-            if (class_exists('IWP_Logger')) {
-                IWP_Logger::error('Manual update check failed', 'updater', array(
+            if (class_exists('FCIP_Logger')) {
+                FCIP_Logger::error('Manual update check failed', 'updater', array(
                     'error' => $e->getMessage(),
                 ));
             }
@@ -332,13 +332,13 @@ class IWP_GitHub_Updater {
      * @return void
      */
     public function display_update_check_notice() {
-        if (empty($_GET['iwp_update_checked'])) {
+        if (empty($_GET['fcip_update_checked'])) {
             return;
         }
 
         printf(
             '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
-            esc_html__('Plugin update check completed. If an update is available, it will appear below.', 'iwp-wp-integration')
+            esc_html__('Plugin update check completed. If an update is available, it will appear below.', 'fluentcart-instawp-provisioning')
         );
     }
 }

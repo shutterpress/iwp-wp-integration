@@ -4,19 +4,19 @@
  *
  * Handles site creation, progress tracking, and storage in FluentCart orders
  *
- * @package IWP
+ * @package FCIP
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-class IWP_Site_Manager {
+class FCIP_Site_Manager {
 
     /**
      * API Client instance
      *
-     * @var IWP_API_Client
+     * @var FCIP_API_Client
      */
     private $api_client;
 
@@ -24,23 +24,23 @@ class IWP_Site_Manager {
      * Constructor
      */
     public function __construct() {
-        $this->api_client = new IWP_API_Client();
+        $this->api_client = new FCIP_API_Client();
         
         // Hook into WordPress actions
-        add_action('wp_ajax_iwp_check_site_status', array($this, 'ajax_check_site_status'));
-        add_action('wp_ajax_nopriv_iwp_check_site_status', array($this, 'ajax_check_site_status'));
-        add_action('iwp_check_pending_sites', array($this, 'check_pending_sites'));
+        add_action('wp_ajax_fcip_check_site_status', array($this, 'ajax_check_site_status'));
+        add_action('wp_ajax_nopriv_fcip_check_site_status', array($this, 'ajax_check_site_status'));
+        add_action('fcip_check_pending_sites', array($this, 'check_pending_sites'));
         
         // Schedule periodic check for pending sites
-        if (!wp_next_scheduled('iwp_check_pending_sites')) {
-            wp_schedule_event(time(), 'every_minute', 'iwp_check_pending_sites');
+        if (!wp_next_scheduled('fcip_check_pending_sites')) {
+            wp_schedule_event(time(), 'every_minute', 'fcip_check_pending_sites');
         }
         
         // Add immediate check on admin pages for better user experience
         add_action('admin_init', array($this, 'maybe_check_pending_sites_immediately'));
         
         // Add AJAX handler for manual status refresh
-        add_action('wp_ajax_iwp_refresh_site_status', array($this, 'ajax_refresh_site_status'));
+        add_action('wp_ajax_fcip_refresh_site_status', array($this, 'ajax_refresh_site_status'));
     }
 
     /**
@@ -75,11 +75,11 @@ class IWP_Site_Manager {
             ))
         );
 
-        $db_site_id = IWP_Sites_Model::create($initial_site_data);
+        $db_site_id = FCIP_Sites_Model::create($initial_site_data);
         if (!$db_site_id && $source === 'fluentcart') {
-            return new WP_Error('tracking_failed', __('Unable to save site tracking. No site was requested.', 'iwp-wp-integration'));
+            return new WP_Error('tracking_failed', __('Unable to save site tracking. No site was requested.', 'fluentcart-instawp-provisioning'));
         }
-        IWP_Logger::info('Created initial site record in database', 'site-manager', array(
+        FCIP_Logger::info('Created initial site record in database', 'site-manager', array(
             'db_id' => $db_site_id,
             'order_id' => $order_id,
             'snapshot_slug' => $snapshot_slug
@@ -91,19 +91,19 @@ class IWP_Site_Manager {
         if (is_wp_error($response)) {
             // Update database record to failed status
             if ($db_site_id) {
-                IWP_Sites_Model::update($initial_site_data['site_id'], array(
+                FCIP_Sites_Model::update($initial_site_data['site_id'], array(
                     'status' => 'failed',
                     'api_response' => array('error' => $response->get_error_message())
                 ));
             }
-            IWP_Logger::error('Site creation failed', 'site-manager', array('error' => $response->get_error_message()));
+            FCIP_Logger::error('Site creation failed', 'site-manager', array('error' => $response->get_error_message()));
             return $response;
         }
 
         $site_data_response = $response['data'] ?? array();
         
         // Debug: Log the actual API response structure
-        IWP_Logger::debug('Site creation API response received', 'site-manager', $site_data_response);
+        FCIP_Logger::debug('Site creation API response received', 'site-manager', $site_data_response);
 
         // Update database record with real site ID and response data
         $real_site_id = $site_data_response['id'] ?? $initial_site_data['site_id'];
@@ -122,8 +122,8 @@ class IWP_Site_Manager {
             'api_response' => $site_data_response
         );
 
-        IWP_Sites_Model::update($initial_site_data['site_id'], $update_data);
-        IWP_Logger::info('Updated site record with API response', 'site-manager', array(
+        FCIP_Sites_Model::update($initial_site_data['site_id'], $update_data);
+        FCIP_Logger::info('Updated site record with API response', 'site-manager', array(
             'old_site_id' => $initial_site_data['site_id'],
             'new_site_id' => $real_site_id,
             'status' => $update_data['status']
@@ -173,7 +173,7 @@ class IWP_Site_Manager {
      * Check status of pending sites
      */
     public function check_pending_sites() {
-        foreach (IWP_Sites_Model::get_pending_sites() as $site) {
+        foreach (FCIP_Sites_Model::get_pending_sites() as $site) {
             if ($site->source === 'fluentcart' && !empty($site->task_id)) {
                 $this->check_database_site_status($site);
             }
@@ -189,15 +189,15 @@ class IWP_Site_Manager {
         // Defensive parity guard: get_pending_sites() already filters status
         // to ('creating', 'progress'), but a future query change could expose
         // trashed rows here. Never resurrect a soft-deleted row.
-        if (isset($db_site->status) && $db_site->status === IWP_Sites_Model::STATUS_TRASHED) {
-            IWP_Logger::info('Skipped DB site status check — row is trashed', 'site-manager', array(
+        if (isset($db_site->status) && $db_site->status === FCIP_Sites_Model::STATUS_TRASHED) {
+            FCIP_Logger::info('Skipped DB site status check — row is trashed', 'site-manager', array(
                 'site_id' => $db_site->site_id,
                 'task_id' => $db_site->task_id,
             ));
             return;
         }
 
-        IWP_Logger::info('Checking database site status', 'site-manager', array(
+        FCIP_Logger::info('Checking database site status', 'site-manager', array(
             'site_id' => $db_site->site_id,
             'task_id' => $db_site->task_id,
             'order_id' => $db_site->order_id
@@ -206,7 +206,7 @@ class IWP_Site_Manager {
         $response = $this->api_client->get_task_status($db_site->task_id);
         
         if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to check database site task status', 'site-manager', array(
+            FCIP_Logger::error('Failed to check database site task status', 'site-manager', array(
                 'site_id' => $db_site->site_id,
                 'task_id' => $db_site->task_id,
                 'error' => $response->get_error_message()
@@ -218,7 +218,7 @@ class IWP_Site_Manager {
         $raw_status = $task_info['status'] ?? 1;
         $status = $this->map_status_code($raw_status);
 
-        IWP_Logger::info('Database site task status check result', 'site-manager', array(
+        FCIP_Logger::info('Database site task status check result', 'site-manager', array(
             'site_id' => $db_site->site_id,
             'task_id' => $db_site->task_id,
             'raw_status' => $raw_status,
@@ -227,7 +227,7 @@ class IWP_Site_Manager {
 
         // If task is still in progress, continue waiting
         if ($status === 'progress') {
-            IWP_Logger::debug('Database site task still in progress', 'site-manager', array(
+            FCIP_Logger::debug('Database site task still in progress', 'site-manager', array(
                 'site_id' => $db_site->site_id,
                 'task_id' => $db_site->task_id
             ));
@@ -236,8 +236,8 @@ class IWP_Site_Manager {
 
         // Task is completed or failed - update database record
         if ($status === 'completed' || $status === 'success') {
-            IWP_Logger::debug('site-manager database handler - About to process completed site', 'site-manager');
-            IWP_Logger::debug('site-manager database handler - Site ID: ' . $db_site->site_id . ', Task ID: ' . $db_site->task_id, 'site-manager');
+            FCIP_Logger::debug('site-manager database handler - About to process completed site', 'site-manager');
+            FCIP_Logger::debug('site-manager database handler - Site ID: ' . $db_site->site_id . ', Task ID: ' . $db_site->task_id, 'site-manager');
             
             // Fetch complete site details now that the site is ready
             $site_details_response = $this->api_client->get_site_details($db_site->site_id);
@@ -249,49 +249,49 @@ class IWP_Site_Manager {
             if (!is_wp_error($site_details_response) && isset($site_details_response['data'])) {
                 // Use the shared parser for correct key paths (creds under
                 // site_meta, site hash from 'hash' → stored as s_hash).
-                $update_data = array_merge($update_data, IWP_API_Client::flatten_site_details($site_details_response));
+                $update_data = array_merge($update_data, FCIP_API_Client::flatten_site_details($site_details_response));
 
-                IWP_Logger::info('Updated database site with fresh credentials', 'site-manager', array(
+                FCIP_Logger::info('Updated database site with fresh credentials', 'site-manager', array(
                     'site_id' => $db_site->site_id,
                     'has_username' => !empty($update_data['wp_username']),
                     'has_password' => !empty($update_data['wp_password'])
                 ));
             } else {
-                IWP_Logger::warning('Could not fetch site details for credentials', 'site-manager', array(
+                FCIP_Logger::warning('Could not fetch site details for credentials', 'site-manager', array(
                     'site_id' => $db_site->site_id,
                     'error' => is_wp_error($site_details_response) ? $site_details_response->get_error_message() : 'No data returned'
                 ));
             }
             
-            IWP_Logger::debug('site-manager database handler - About to call IWP_Sites_Model::update', 'site-manager');
-            IWP_Logger::debug('site-manager database handler - update data', 'site-manager', $update_data);
-            IWP_Sites_Model::update($db_site->site_id, $update_data);
-            IWP_Logger::debug('site-manager database handler - IWP_Sites_Model::update completed', 'site-manager');
+            FCIP_Logger::debug('site-manager database handler - About to call FCIP_Sites_Model::update', 'site-manager');
+            FCIP_Logger::debug('site-manager database handler - update data', 'site-manager', $update_data);
+            FCIP_Sites_Model::update($db_site->site_id, $update_data);
+            FCIP_Logger::debug('site-manager database handler - FCIP_Sites_Model::update completed', 'site-manager');
 
             // Add success note to order if available (use updated credentials)
             if ($db_site->source === 'fluentcart') {
-                do_action('iwp_fluentcart_site_status_updated', $db_site, $update_data);
+                do_action('fcip_fluentcart_site_status_updated', $db_site, $update_data);
             }
 
-            IWP_Logger::info('Database site marked as completed', 'site-manager', array(
+            FCIP_Logger::info('Database site marked as completed', 'site-manager', array(
                 'site_id' => $db_site->site_id,
                 'task_id' => $db_site->task_id
             ));
             
-            IWP_Logger::debug('site-manager database handler - Completed processing, about to exit success branch', 'site-manager');
+            FCIP_Logger::debug('site-manager database handler - Completed processing, about to exit success branch', 'site-manager');
         } else {
             // Task failed
-            IWP_Sites_Model::update($db_site->site_id, array(
+            FCIP_Sites_Model::update($db_site->site_id, array(
                 'status' => 'failed',
                 'api_response' => $task_info
             ));
 
             // Add failure note to order if available
             if ($db_site->source === 'fluentcart') {
-                do_action('iwp_fluentcart_site_status_updated', $db_site, array('status' => 'failed'));
+                do_action('fcip_fluentcart_site_status_updated', $db_site, array('status' => 'failed'));
             }
 
-            IWP_Logger::info('Database site marked as failed', 'site-manager', array(
+            FCIP_Logger::info('Database site marked as failed', 'site-manager', array(
                 'site_id' => $db_site->site_id,
                 'task_id' => $db_site->task_id
             ));
@@ -334,8 +334,8 @@ class IWP_Site_Manager {
      */
     public function get_order_sites($order_id) {
         $sites = array();
-        foreach (IWP_Sites_Model::get_by_order_id($order_id) as $site) {
-            if ($site->source !== 'fluentcart' || $site->status === IWP_Sites_Model::STATUS_TRASHED) {
+        foreach (FCIP_Sites_Model::get_by_order_id($order_id) as $site) {
+            if ($site->source !== 'fluentcart' || $site->status === FCIP_Sites_Model::STATUS_TRASHED) {
                 continue;
             }
             $data = (array) $site;
@@ -355,19 +355,15 @@ class IWP_Site_Manager {
      * Resolve a customer-facing failure message for a failed site row.
      *
      * Single source of truth: the per-site `api_response` column on
-     * wp_iwp_sites. The failure path stores `['error' => $msg]` here at
+     * wp_fcip_sites. The failure path stores `['error' => $msg]` here at
      * the instant the API call fails (see create_site_with_tracking()
      * lines 88-95) and the success path overwrites the column with the
      * full success response (line 119) — so the column always reflects
      * the row's *current* state. No order-meta fallback, no per-product
      * lookup, no stale-data risk.
      *
-     * Runs the resolved string through IWP_API_Client::humanize_error()
-     * for legacy rows whose error was stored before the make_request
-     * humanize fix landed (idempotent for already-humanized text).
-     *
      * @param mixed $api_response_raw JSON string or array from
-     *                                wp_iwp_sites.api_response.
+     *                                wp_fcip_sites.api_response.
      * @return string|null Friendly error message, or null when the
      *                     column carries no `error` key (i.e. the row
      *                     either succeeded or has no API response yet).
@@ -464,9 +460,9 @@ class IWP_Site_Manager {
             
             // Check database for updated status if we have a site_id
             if (!empty($site_id)) {
-                IWP_Logger::debug('transform_site_data_for_frontend - About to call get_by_site_id for site_id: ' . $site_id, 'site-manager');
-                $db_site = IWP_Sites_Model::get_by_site_id($site_id);
-                IWP_Logger::debug('transform_site_data_for_frontend - get_by_site_id returned: ' . ($db_site ? 'DATA' : 'NULL'), 'site-manager');
+                FCIP_Logger::debug('transform_site_data_for_frontend - About to call get_by_site_id for site_id: ' . $site_id, 'site-manager');
+                $db_site = FCIP_Sites_Model::get_by_site_id($site_id);
+                FCIP_Logger::debug('transform_site_data_for_frontend - get_by_site_id returned: ' . ($db_site ? 'DATA' : 'NULL'), 'site-manager');
                 if ($db_site && !empty($db_site->status)) {
                     $current_status = $db_site->status;
                     
@@ -478,11 +474,11 @@ class IWP_Site_Manager {
                         }
                         if (!empty($db_site->wp_username) && empty($raw_site_data['wp_username'])) {
                             $raw_site_data['wp_username'] = $db_site->wp_username;
-                            IWP_Logger::debug('Updated wp_username from database', 'site-manager');
+                            FCIP_Logger::debug('Updated wp_username from database', 'site-manager');
                         }
                         if (!empty($db_site->wp_password) && empty($raw_site_data['wp_password'])) {
                             $raw_site_data['wp_password'] = $db_site->wp_password;
-                            IWP_Logger::debug('Updated wp_password from database: [REDACTED]', 'site-manager');
+                            FCIP_Logger::debug('Updated wp_password from database: [REDACTED]', 'site-manager');
                         }
                         if (!empty($db_site->s_hash) && empty($raw_site_data['s_hash'])) {
                             $raw_site_data['s_hash'] = $db_site->s_hash;
@@ -528,18 +524,18 @@ class IWP_Site_Manager {
      */
     public function ajax_check_site_status() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'iwp_check_status')) {
-            wp_die(__('Security check failed', 'iwp-wp-integration'));
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'fcip_check_status')) {
+            wp_die(__('Security check failed', 'fluentcart-instawp-provisioning'));
         }
 
         // Check capabilities
         if (!current_user_can('manage_options')) {
-            wp_die(__('Insufficient permissions', 'iwp-wp-integration'));
+            wp_die(__('Insufficient permissions', 'fluentcart-instawp-provisioning'));
         }
 
         $order_id = intval($_POST['order_id'] ?? 0);
         if (!$order_id) {
-            wp_send_json_error(__('Invalid order ID', 'iwp-wp-integration'));
+            wp_send_json_error(__('Invalid order ID', 'fluentcart-instawp-provisioning'));
         }
 
         $sites = $this->get_order_sites($order_id);
@@ -558,26 +554,26 @@ class IWP_Site_Manager {
         
         // If is_pool is present and true - site is ready immediately
         if ($is_pool_exists && $site_data_response['is_pool'] === true) {
-            IWP_Logger::info('Site determined as completed - is_pool is present and true', 'site-manager');
+            FCIP_Logger::info('Site determined as completed - is_pool is present and true', 'site-manager');
             return 'completed';
         }
         
         // If is_pool is present and false - need to check task status
         if ($is_pool_exists && $site_data_response['is_pool'] === false) {
-            IWP_Logger::info('is_pool is present and false - checking task status', 'site-manager');
+            FCIP_Logger::info('is_pool is present and false - checking task status', 'site-manager');
             if (!empty($site_data_response['task_id'])) {
                 $status = $this->map_status_code($site_data_response['status'] ?? 1);
-                IWP_Logger::info('Task status mapped', 'site-manager', array('status' => $status));
+                FCIP_Logger::info('Task status mapped', 'site-manager', array('status' => $status));
                 return $status;
             }
         }
         
         // If is_pool is not present at all - process is ongoing, need task checking
         if (!$is_pool_exists) {
-            IWP_Logger::info('is_pool not present - process ongoing, need task checking', 'site-manager');
+            FCIP_Logger::info('is_pool not present - process ongoing, need task checking', 'site-manager');
             if (!empty($site_data_response['task_id'])) {
                 $status = $this->map_status_code($site_data_response['status'] ?? 1);
-                IWP_Logger::info('Task status mapped for ongoing process', 'site-manager', array('status' => $status));
+                FCIP_Logger::info('Task status mapped for ongoing process', 'site-manager', array('status' => $status));
                 return $status;
             }
             // If no task_id but is_pool is missing, assume still processing
@@ -586,12 +582,12 @@ class IWP_Site_Manager {
         
         // Fallback: If we have a wp_url and wp_username, the site is ready
         if (!empty($site_data_response['wp_url']) && !empty($site_data_response['wp_username'])) {
-            IWP_Logger::info('Site determined as completed - has wp_url and wp_username', 'site-manager');
+            FCIP_Logger::info('Site determined as completed - has wp_url and wp_username', 'site-manager');
             return 'completed';
         }
         
         // Default to progress if we can't determine status
-        IWP_Logger::warning('Could not determine site status, defaulting to progress', 'site-manager');
+        FCIP_Logger::warning('Could not determine site status, defaulting to progress', 'site-manager');
         return 'progress';
     }
 
@@ -620,7 +616,7 @@ class IWP_Site_Manager {
                     return 'failed';
                 default:
                     // Unknown string status, treat as progress
-                    IWP_Logger::warning('Unknown string status received', 'site-manager', array('status' => $status_code));
+                    FCIP_Logger::warning('Unknown string status received', 'site-manager', array('status' => $status_code));
                     return 'progress';
             }
         }
@@ -636,7 +632,7 @@ class IWP_Site_Manager {
                 return 'failed';    // Site creation failed
             default:
                 // Handle any unknown status codes as progress
-                IWP_Logger::warning('Unknown numeric status code received', 'site-manager', array('status_code' => $status_code));
+                FCIP_Logger::warning('Unknown numeric status code received', 'site-manager', array('status_code' => $status_code));
                 return 'progress';
         }
     }
@@ -673,24 +669,24 @@ class IWP_Site_Manager {
     public function maybe_check_pending_sites_immediately() {
         // Only run on specific admin pages to avoid performance issues
         $screen = get_current_screen();
-        if (!$screen || !in_array($screen->id, array('toplevel_page_instawp-integration', 'instawp_page_instawp-sites'))) {
+        if (!$screen || !in_array($screen->id, array('toplevel_page_fcip-sites'))) {
             return;
         }
 
         // Check if we have any pending sites
-        $pending_db_sites = IWP_Sites_Model::get_pending_sites();
+        $pending_db_sites = FCIP_Sites_Model::get_pending_sites();
         if (empty($pending_db_sites)) {
             return;
         }
 
         // Only check if last check was more than 30 seconds ago to avoid excessive API calls
-        $last_check = get_transient('iwp_last_immediate_check');
+        $last_check = get_transient('fcip_last_immediate_check');
         if ($last_check && (time() - $last_check) < 30) {
             return;
         }
 
         // Set transient to prevent too frequent checks
-        set_transient('iwp_last_immediate_check', time(), 60);
+        set_transient('fcip_last_immediate_check', time(), 60);
 
         // Check pending sites
         $this->check_pending_sites();
@@ -701,25 +697,25 @@ class IWP_Site_Manager {
      */
     public function ajax_refresh_site_status() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'iwp_refresh_site_status')) {
-            wp_send_json_error(array('message' => __('Security check failed', 'iwp-wp-integration')));
+        if (!wp_verify_nonce($_POST['nonce'], 'fcip_refresh_site_status')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'fluentcart-instawp-provisioning')));
         }
 
         // Check capabilities
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => __('Insufficient permissions', 'iwp-wp-integration')));
+            wp_send_json_error(array('message' => __('Insufficient permissions', 'fluentcart-instawp-provisioning')));
         }
 
         // Force check pending sites
-        delete_transient('iwp_last_immediate_check');
+        delete_transient('fcip_last_immediate_check');
         $this->check_pending_sites();
 
         // Get updated pending sites count
-        $pending_db_sites = IWP_Sites_Model::get_pending_sites();
+        $pending_db_sites = FCIP_Sites_Model::get_pending_sites();
         $pending_count = count($pending_db_sites);
 
         wp_send_json_success(array(
-            'message' => sprintf(__('Status refreshed. %d sites still pending.', 'iwp-wp-integration'), $pending_count),
+            'message' => sprintf(__('Status refreshed. %d sites still pending.', 'fluentcart-instawp-provisioning'), $pending_count),
             'pending_count' => $pending_count
         ));
     }

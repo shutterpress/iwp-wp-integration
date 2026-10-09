@@ -2,34 +2,34 @@
 /**
  * InstaWP Shortcode Class
  *
- * Handles the iwp_site_creator shortcode functionality
+ * Handles the fcip_site_creator shortcode functionality
  *
- * @package IWP
+ * @package FCIP
  * @since 1.0.0
  */
 
 defined('ABSPATH') || exit;
 
-class IWP_Shortcode {
+class FCIP_Shortcode {
 
     /**
      * Constructor
      */
     public function __construct() {
-        add_shortcode('iwp_site_creator', array($this, 'render_shortcode'));
-        add_action('wp_ajax_iwp_create_site_shortcode', array($this, 'handle_ajax_site_creation'));
-        add_action('wp_ajax_nopriv_iwp_create_site_shortcode', array($this, 'handle_ajax_site_creation'));
-        add_action('wp_ajax_iwp_check_task_status', array($this, 'handle_ajax_check_task_status'));
-        add_action('wp_ajax_nopriv_iwp_check_task_status', array($this, 'handle_ajax_check_task_status'));
-        add_action('wp_ajax_iwp_apply_delayed_post_options', array($this, 'handle_ajax_apply_delayed_post_options'));
-        add_action('wp_ajax_nopriv_iwp_apply_delayed_post_options', array($this, 'handle_ajax_apply_delayed_post_options'));
-        add_action('wp_ajax_iwp_refresh_nonce', array($this, 'handle_ajax_refresh_nonce'));
-        add_action('wp_ajax_nopriv_iwp_refresh_nonce', array($this, 'handle_ajax_refresh_nonce'));
+        add_shortcode('fcip_site_creator', array($this, 'render_shortcode'));
+        add_action('wp_ajax_fcip_create_site_shortcode', array($this, 'handle_ajax_site_creation'));
+        add_action('wp_ajax_nopriv_fcip_create_site_shortcode', array($this, 'handle_ajax_site_creation'));
+        add_action('wp_ajax_fcip_check_task_status', array($this, 'handle_ajax_check_task_status'));
+        add_action('wp_ajax_nopriv_fcip_check_task_status', array($this, 'handle_ajax_check_task_status'));
+        add_action('wp_ajax_fcip_apply_delayed_post_options', array($this, 'handle_ajax_apply_delayed_post_options'));
+        add_action('wp_ajax_nopriv_fcip_apply_delayed_post_options', array($this, 'handle_ajax_apply_delayed_post_options'));
+        add_action('wp_ajax_fcip_refresh_nonce', array($this, 'handle_ajax_refresh_nonce'));
+        add_action('wp_ajax_nopriv_fcip_refresh_nonce', array($this, 'handle_ajax_refresh_nonce'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
     }
 
     /**
-     * Render the iwp_site_creator shortcode
+     * Render the fcip_site_creator shortcode
      *
      * @param array $atts Shortcode attributes
      * @return string HTML output
@@ -42,28 +42,28 @@ class IWP_Shortcode {
             'name' => '',
             'expiry_hours' => '',
             'sandbox' => ''
-        ), $atts, 'iwp_site_creator');
+        ), $atts, 'fcip_site_creator');
 
         // Validate required parameters
         if (empty($atts['snapshot_slug'])) {
-            return '<div class="iwp-site-creator-error">Error: snapshot_slug parameter is required</div>';
+            return '<div class="fcip-site-creator-error">Error: snapshot_slug parameter is required</div>';
         }
 
         // Generate unique form ID
-        $form_id = 'iwp-site-creator-' . uniqid();
+        $form_id = 'fcip-site-creator-' . uniqid();
 
         // Build form HTML
         ob_start();
         ?>
-        <div class="iwp-site-creator-container" id="<?php echo esc_attr($form_id); ?>">
-            <form class="iwp-site-creator-form" method="post">
-                <div class="iwp-site-creator-field-group">
-                    <label class="iwp-site-creator-label" for="<?php echo esc_attr($form_id); ?>-name">
-                        <?php esc_html_e('Name:', 'iwp-wp-integration'); ?>
+        <div class="fcip-site-creator-container" id="<?php echo esc_attr($form_id); ?>">
+            <form class="fcip-site-creator-form" method="post">
+                <div class="fcip-site-creator-field-group">
+                    <label class="fcip-site-creator-label" for="<?php echo esc_attr($form_id); ?>-name">
+                        <?php esc_html_e('Name:', 'fluentcart-instawp-provisioning'); ?>
                     </label>
                     <input 
                         type="text" 
-                        class="iwp-site-creator-input iwp-site-creator-name" 
+                        class="fcip-site-creator-input fcip-site-creator-name" 
                         id="<?php echo esc_attr($form_id); ?>-name" 
                         name="site_name" 
                         value="<?php echo esc_attr($atts['name']); ?>" 
@@ -71,13 +71,13 @@ class IWP_Shortcode {
                     />
                 </div>
 
-                <div class="iwp-site-creator-field-group">
-                    <label class="iwp-site-creator-label" for="<?php echo esc_attr($form_id); ?>-email">
-                        <?php esc_html_e('Email:', 'iwp-wp-integration'); ?>
+                <div class="fcip-site-creator-field-group">
+                    <label class="fcip-site-creator-label" for="<?php echo esc_attr($form_id); ?>-email">
+                        <?php esc_html_e('Email:', 'fluentcart-instawp-provisioning'); ?>
                     </label>
                     <input 
                         type="email" 
-                        class="iwp-site-creator-input iwp-site-creator-email" 
+                        class="fcip-site-creator-input fcip-site-creator-email" 
                         id="<?php echo esc_attr($form_id); ?>-email" 
                         name="site_email" 
                         value="<?php echo esc_attr($atts['email']); ?>" 
@@ -85,52 +85,52 @@ class IWP_Shortcode {
                     />
                 </div>
 
-                <div class="iwp-site-creator-actions">
+                <div class="fcip-site-creator-actions">
                     <button 
                         type="submit" 
-                        class="iwp-site-creator-button iwp-site-creator-submit"
+                        class="fcip-site-creator-button fcip-site-creator-submit"
                     >
-                        <?php esc_html_e('Create Site', 'iwp-wp-integration'); ?>
+                        <?php esc_html_e('Create Site', 'fluentcart-instawp-provisioning'); ?>
                     </button>
                 </div>
 
-                <div class="iwp-site-creator-status" style="display: none;">
-                    <div class="iwp-site-creator-message"></div>
-                    <div class="iwp-site-creator-progress">
-                        <div class="iwp-site-creator-progress-bar"></div>
+                <div class="fcip-site-creator-status" style="display: none;">
+                    <div class="fcip-site-creator-message"></div>
+                    <div class="fcip-site-creator-progress">
+                        <div class="fcip-site-creator-progress-bar"></div>
                     </div>
                 </div>
 
-                <div class="iwp-site-creator-results" style="display: none;">
-                    <div class="iwp-site-creator-site-info">
-                        <h3 class="iwp-site-creator-success-title"><?php esc_html_e('Site Created Successfully!', 'iwp-wp-integration'); ?></h3>
-                        <div class="iwp-site-creator-site-details">
-                            <div class="iwp-site-creator-detail">
-                                <span class="iwp-site-creator-detail-label"><?php esc_html_e('Site URL:', 'iwp-wp-integration'); ?></span>
-                                <a class="iwp-site-creator-site-url" href="#" target="_blank"></a>
+                <div class="fcip-site-creator-results" style="display: none;">
+                    <div class="fcip-site-creator-site-info">
+                        <h3 class="fcip-site-creator-success-title"><?php esc_html_e('Site Created Successfully!', 'fluentcart-instawp-provisioning'); ?></h3>
+                        <div class="fcip-site-creator-site-details">
+                            <div class="fcip-site-creator-detail">
+                                <span class="fcip-site-creator-detail-label"><?php esc_html_e('Site URL:', 'fluentcart-instawp-provisioning'); ?></span>
+                                <a class="fcip-site-creator-site-url" href="#" target="_blank"></a>
                             </div>
-                            <div class="iwp-site-creator-detail">
-                                <span class="iwp-site-creator-detail-label"><?php esc_html_e('Admin Username:', 'iwp-wp-integration'); ?></span>
-                                <span class="iwp-site-creator-username"></span>
-                                <button type="button" class="iwp-site-creator-copy-btn" data-copy="username">
-                                    <?php esc_html_e('Copy', 'iwp-wp-integration'); ?>
+                            <div class="fcip-site-creator-detail">
+                                <span class="fcip-site-creator-detail-label"><?php esc_html_e('Admin Username:', 'fluentcart-instawp-provisioning'); ?></span>
+                                <span class="fcip-site-creator-username"></span>
+                                <button type="button" class="fcip-site-creator-copy-btn" data-copy="username">
+                                    <?php esc_html_e('Copy', 'fluentcart-instawp-provisioning'); ?>
                                 </button>
                             </div>
-                            <div class="iwp-site-creator-detail">
-                                <span class="iwp-site-creator-detail-label"><?php esc_html_e('Admin Password:', 'iwp-wp-integration'); ?></span>
-                                <span class="iwp-site-creator-password" style="display: none;"></span>
-                                <span class="iwp-site-creator-password-hidden">••••••••</span>
-                                <button type="button" class="iwp-site-creator-toggle-password">
-                                    <?php esc_html_e('Show', 'iwp-wp-integration'); ?>
+                            <div class="fcip-site-creator-detail">
+                                <span class="fcip-site-creator-detail-label"><?php esc_html_e('Admin Password:', 'fluentcart-instawp-provisioning'); ?></span>
+                                <span class="fcip-site-creator-password" style="display: none;"></span>
+                                <span class="fcip-site-creator-password-hidden">••••••••</span>
+                                <button type="button" class="fcip-site-creator-toggle-password">
+                                    <?php esc_html_e('Show', 'fluentcart-instawp-provisioning'); ?>
                                 </button>
-                                <button type="button" class="iwp-site-creator-copy-btn" data-copy="password">
-                                    <?php esc_html_e('Copy', 'iwp-wp-integration'); ?>
+                                <button type="button" class="fcip-site-creator-copy-btn" data-copy="password">
+                                    <?php esc_html_e('Copy', 'fluentcart-instawp-provisioning'); ?>
                                 </button>
                             </div>
-                            <div class="iwp-site-creator-detail">
-                                <span class="iwp-site-creator-detail-label"><?php esc_html_e('Admin Login:', 'iwp-wp-integration'); ?></span>
-                                <a class="iwp-site-creator-admin-url" href="#" target="_blank">
-                                    <?php esc_html_e('Login to Admin', 'iwp-wp-integration'); ?>
+                            <div class="fcip-site-creator-detail">
+                                <span class="fcip-site-creator-detail-label"><?php esc_html_e('Admin Login:', 'fluentcart-instawp-provisioning'); ?></span>
+                                <a class="fcip-site-creator-admin-url" href="#" target="_blank">
+                                    <?php esc_html_e('Login to Admin', 'fluentcart-instawp-provisioning'); ?>
                                 </a>
                             </div>
                         </div>
@@ -141,8 +141,8 @@ class IWP_Shortcode {
                 <input type="hidden" name="snapshot_slug" value="<?php echo esc_attr($atts['snapshot_slug']); ?>" />
                 <input type="hidden" name="expiry_hours" value="<?php echo esc_attr($atts['expiry_hours']); ?>" />
                 <input type="hidden" name="sandbox" value="<?php echo esc_attr($atts['sandbox']); ?>" />
-                <input type="hidden" name="action" value="iwp_create_site_shortcode" />
-                <?php wp_nonce_field('iwp_site_creator_nonce', 'iwp_site_creator_nonce'); ?>
+                <input type="hidden" name="action" value="fcip_create_site_shortcode" />
+                <?php wp_nonce_field('fcip_site_creator_nonce', 'fcip_site_creator_nonce'); ?>
             </form>
         </div>
         <?php
@@ -154,8 +154,8 @@ class IWP_Shortcode {
      */
     public function handle_ajax_site_creation() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['iwp_site_creator_nonce'], 'iwp_site_creator_nonce')) {
-            wp_send_json_error(array('message' => __('Security check failed', 'iwp-wp-integration')));
+        if (!wp_verify_nonce($_POST['fcip_site_creator_nonce'], 'fcip_site_creator_nonce')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'fluentcart-instawp-provisioning')));
         }
 
         // Sanitize input data
@@ -167,16 +167,16 @@ class IWP_Shortcode {
 
         // Validate required fields
         if (empty($snapshot_slug) || empty($site_name) || empty($site_email)) {
-            wp_send_json_error(array('message' => __('All fields are required', 'iwp-wp-integration')));
+            wp_send_json_error(array('message' => __('All fields are required', 'fluentcart-instawp-provisioning')));
         }
 
         if (!is_email($site_email)) {
-            wp_send_json_error(array('message' => __('Please enter a valid email address', 'iwp-wp-integration')));
+            wp_send_json_error(array('message' => __('Please enter a valid email address', 'fluentcart-instawp-provisioning')));
         }
 
         try {
             // Get configured API client
-            $api_client = IWP_Service::get_api_client();
+            $api_client = FCIP_Service::get_api_client();
             if (is_wp_error($api_client)) {
                 wp_send_json_error(array('message' => $api_client->get_error_message()));
             }
@@ -204,7 +204,7 @@ class IWP_Shortcode {
             $result = $api_client->create_site_from_snapshot($snapshot_slug, $site_data);
 
             if (is_wp_error($result)) {
-                wp_send_json_error(array('message' => IWP_API_Client::humanize_error($result)));
+                wp_send_json_error(array('message' => FCIP_API_Client::humanize_error($result)));
             }
 
             // Check if site was created successfully
@@ -241,7 +241,7 @@ class IWP_Shortcode {
 
                 wp_send_json_success($response_data);
             } else {
-                wp_send_json_error(array('message' => __('Site creation failed: Invalid API response', 'iwp-wp-integration')));
+                wp_send_json_error(array('message' => __('Site creation failed: Invalid API response', 'fluentcart-instawp-provisioning')));
             }
 
         } catch (Exception $e) {
@@ -290,18 +290,18 @@ class IWP_Shortcode {
             );
 
             // Create database record
-            IWP_Sites_Model::init();
-            $db_site_id = IWP_Sites_Model::create($site_data);
+            FCIP_Sites_Model::init();
+            $db_site_id = FCIP_Sites_Model::create($site_data);
 
             if ($db_site_id) {
-                IWP_Logger::info('Demo site stored in database', 'shortcode', array(
+                FCIP_Logger::info('Demo site stored in database', 'shortcode', array(
                     'db_id' => $db_site_id,
                     'site_id' => $response_data['site_id'],
                     'email' => $email,
                     'user_id' => $user_id
                 ));
             } else {
-                IWP_Logger::error('Failed to store demo site in database', 'shortcode', array(
+                FCIP_Logger::error('Failed to store demo site in database', 'shortcode', array(
                     'site_id' => $response_data['site_id'],
                     'email' => $email
                 ));
@@ -310,7 +310,7 @@ class IWP_Shortcode {
             return $db_site_id;
         } catch (Exception $e) {
             // Log the error but don't fail the site creation
-            IWP_Logger::error('Exception storing demo site in database', 'shortcode', array(
+            FCIP_Logger::error('Exception storing demo site in database', 'shortcode', array(
                 'site_id' => $response_data['site_id'] ?? 'unknown',
                 'error' => $e->getMessage()
             ));
@@ -328,7 +328,7 @@ class IWP_Shortcode {
      */
     private function update_demo_site_details($site_id, $response_data, $full_api_response) {
         try {
-            IWP_Sites_Model::init();
+            FCIP_Sites_Model::init();
 
             // Prepare update data
             $update_data = array(
@@ -342,22 +342,22 @@ class IWP_Shortcode {
             );
 
             // Update the database record
-            $success = IWP_Sites_Model::update($site_id, $update_data);
+            $success = FCIP_Sites_Model::update($site_id, $update_data);
 
             if ($success) {
-                IWP_Logger::info('Demo site details updated in database after task completion', 'shortcode', array(
+                FCIP_Logger::info('Demo site details updated in database after task completion', 'shortcode', array(
                     'site_id' => $site_id,
                     'site_url' => $response_data['site_url']
                 ));
             } else {
-                IWP_Logger::error('Failed to update demo site details in database', 'shortcode', array(
+                FCIP_Logger::error('Failed to update demo site details in database', 'shortcode', array(
                     'site_id' => $site_id
                 ));
             }
 
             return $success;
         } catch (Exception $e) {
-            IWP_Logger::error('Exception updating demo site details in database', 'shortcode', array(
+            FCIP_Logger::error('Exception updating demo site details in database', 'shortcode', array(
                 'site_id' => $site_id,
                 'error' => $e->getMessage()
             ));
@@ -377,26 +377,26 @@ class IWP_Shortcode {
         
         // If is_pool is present and true - site is ready immediately
         if ($is_pool_exists && $site_data_response['is_pool'] === true) {
-            IWP_Logger::info('Shortcode site determined as completed - is_pool is present and true', 'shortcode');
+            FCIP_Logger::info('Shortcode site determined as completed - is_pool is present and true', 'shortcode');
             return 'completed';
         }
         
         // If is_pool is present and false - need to check task status
         if ($is_pool_exists && $site_data_response['is_pool'] === false) {
-            IWP_Logger::info('Shortcode site - is_pool is present and false - checking task status', 'shortcode');
+            FCIP_Logger::info('Shortcode site - is_pool is present and false - checking task status', 'shortcode');
             if (!empty($site_data_response['task_id'])) {
                 $status = $this->map_status_code($site_data_response['status'] ?? 1);
-                IWP_Logger::info('Shortcode site task status mapped', 'shortcode', array('status' => $status));
+                FCIP_Logger::info('Shortcode site task status mapped', 'shortcode', array('status' => $status));
                 return $status;
             }
         }
         
         // If is_pool is not present at all - process is ongoing, need task checking
         if (!$is_pool_exists) {
-            IWP_Logger::info('Shortcode site - is_pool not present - process ongoing, need task checking', 'shortcode');
+            FCIP_Logger::info('Shortcode site - is_pool not present - process ongoing, need task checking', 'shortcode');
             if (!empty($site_data_response['task_id'])) {
                 $status = $this->map_status_code($site_data_response['status'] ?? 1);
-                IWP_Logger::info('Shortcode site task status mapped for ongoing process', 'shortcode', array('status' => $status));
+                FCIP_Logger::info('Shortcode site task status mapped for ongoing process', 'shortcode', array('status' => $status));
                 return $status;
             }
             // If no task_id but is_pool is missing, assume still processing
@@ -405,12 +405,12 @@ class IWP_Shortcode {
         
         // Fallback: If we have a wp_url and wp_username, the site is ready
         if (!empty($site_data_response['wp_url']) && !empty($site_data_response['wp_username'])) {
-            IWP_Logger::info('Shortcode site determined as completed - has wp_url and wp_username', 'shortcode');
+            FCIP_Logger::info('Shortcode site determined as completed - has wp_url and wp_username', 'shortcode');
             return 'completed';
         }
         
         // Default to progress if we can't determine status
-        IWP_Logger::warning('Shortcode site - could not determine site status, defaulting to progress', 'shortcode');
+        FCIP_Logger::warning('Shortcode site - could not determine site status, defaulting to progress', 'shortcode');
         return 'progress';
     }
 
@@ -439,7 +439,7 @@ class IWP_Shortcode {
                     return 'failed';
                 default:
                     // Unknown string status, treat as progress
-                    IWP_Logger::warning('Unknown string status received in shortcode', 'shortcode', array('status' => $status_code));
+                    FCIP_Logger::warning('Unknown string status received in shortcode', 'shortcode', array('status' => $status_code));
                     return 'progress';
             }
         }
@@ -454,7 +454,7 @@ class IWP_Shortcode {
             case 2:
                 return 'failed';
             default:
-                IWP_Logger::warning('Unknown numeric status code in shortcode', 'shortcode', array('status_code' => $status_code));
+                FCIP_Logger::warning('Unknown numeric status code in shortcode', 'shortcode', array('status_code' => $status_code));
                 return 'progress';
         }
     }
@@ -462,7 +462,7 @@ class IWP_Shortcode {
     /**
      * Apply post_options configuration to newly created site
      *
-     * @param IWP_API_Client $api_client
+     * @param FCIP_API_Client $api_client
      * @param string $site_id
      * @param array $response_data
      */
@@ -470,11 +470,11 @@ class IWP_Shortcode {
         try {
             // Define post_options to apply after site creation
             $post_options = array(
-                'iwp_site_id' => $site_id,
-                'iwp_created_at' => current_time('mysql')
+                'fcip_site_id' => $site_id,
+                'fcip_created_at' => current_time('mysql')
             );
 
-            IWP_Logger::info('Applying post_options to shortcode-created site', 'shortcode', array(
+            FCIP_Logger::info('Applying post_options to shortcode-created site', 'shortcode', array(
                 'site_id' => $site_id,
                 'post_options' => $post_options
             ));
@@ -483,7 +483,7 @@ class IWP_Shortcode {
             $update_result = $api_client->update_site($site_id, $post_options);
 
             if (is_wp_error($update_result)) {
-                IWP_Logger::warning('Post_options update failed for shortcode site', 'shortcode', array(
+                FCIP_Logger::warning('Post_options update failed for shortcode site', 'shortcode', array(
                     'site_id' => $site_id,
                     'error' => $update_result->get_error_message()
                 ));
@@ -491,7 +491,7 @@ class IWP_Shortcode {
                 // Add warning to response but don't fail the entire creation
                 $response_data['post_options_warning'] = 'Site created successfully, but post-configuration update failed: ' . $update_result->get_error_message();
             } else {
-                IWP_Logger::info('Post_options applied successfully to shortcode site', 'shortcode', array(
+                FCIP_Logger::info('Post_options applied successfully to shortcode site', 'shortcode', array(
                     'site_id' => $site_id
                 ));
                 
@@ -499,7 +499,7 @@ class IWP_Shortcode {
             }
 
         } catch (Exception $e) {
-            IWP_Logger::error('Exception during post_options update for shortcode site', 'shortcode', array(
+            FCIP_Logger::error('Exception during post_options update for shortcode site', 'shortcode', array(
                 'site_id' => $site_id,
                 'error' => $e->getMessage()
             ));
@@ -517,26 +517,26 @@ class IWP_Shortcode {
      */
     public function handle_ajax_refresh_nonce() {
         wp_send_json_success(array(
-            'nonce' => wp_create_nonce('iwp_site_creator_nonce'),
+            'nonce' => wp_create_nonce('fcip_site_creator_nonce'),
         ));
     }
 
     public function handle_ajax_check_task_status() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'iwp_check_task_status')) {
-            wp_send_json_error(array('message' => __('Security check failed', 'iwp-wp-integration')));
+        if (!wp_verify_nonce($_POST['nonce'], 'fcip_check_task_status')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'fluentcart-instawp-provisioning')));
         }
 
         // Get task ID
         $task_id = sanitize_text_field($_POST['task_id']);
 
         if (empty($task_id)) {
-            wp_send_json_error(array('message' => __('Task ID is required', 'iwp-wp-integration')));
+            wp_send_json_error(array('message' => __('Task ID is required', 'fluentcart-instawp-provisioning')));
         }
 
         try {
             // Get configured API client
-            $api_client = IWP_Service::get_api_client();
+            $api_client = FCIP_Service::get_api_client();
             if (is_wp_error($api_client)) {
                 wp_send_json_error(array('message' => $api_client->get_error_message()));
             }
@@ -585,7 +585,7 @@ class IWP_Shortcode {
                 // If task is completed, fetch full site details
                 if ($string_status === 'completed' && isset($status_data['resource_id'])) {
                     $site_id = $status_data['resource_id'];
-                    IWP_Logger::info('Task completed, fetching site details', 'shortcode', array('site_id' => $site_id));
+                    FCIP_Logger::info('Task completed, fetching site details', 'shortcode', array('site_id' => $site_id));
 
                     $site_details = $api_client->get_site_details($site_id);
                     if (!is_wp_error($site_details) && isset($site_details['data'])) {
@@ -598,12 +598,12 @@ class IWP_Shortcode {
                         $response_data['site_id'] = $site_id;
                         $response_data['admin_url'] = isset($site_info['wp_admin_url']) ? $site_info['wp_admin_url'] : '';
 
-                        IWP_Logger::info('Site details fetched successfully', 'shortcode', array('site_url' => $response_data['site_url']));
+                        FCIP_Logger::info('Site details fetched successfully', 'shortcode', array('site_url' => $response_data['site_url']));
 
                         // Update database with full site details
                         $this->update_demo_site_details($site_id, $response_data, $site_details);
                     } else {
-                        IWP_Logger::warning('Failed to fetch site details after task completion', 'shortcode', array('site_id' => $site_id));
+                        FCIP_Logger::warning('Failed to fetch site details after task completion', 'shortcode', array('site_id' => $site_id));
                     }
                 }
 
@@ -611,7 +611,7 @@ class IWP_Shortcode {
 
                 wp_send_json_success($response_data);
             } else {
-                wp_send_json_error(array('message' => __('Invalid task status response', 'iwp-wp-integration')));
+                wp_send_json_error(array('message' => __('Invalid task status response', 'fluentcart-instawp-provisioning')));
             }
 
         } catch (Exception $e) {
@@ -624,20 +624,20 @@ class IWP_Shortcode {
      */
     public function handle_ajax_apply_delayed_post_options() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'iwp_apply_delayed_post_options')) {
-            wp_send_json_error(array('message' => __('Security check failed', 'iwp-wp-integration')));
+        if (!wp_verify_nonce($_POST['nonce'], 'fcip_apply_delayed_post_options')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'fluentcart-instawp-provisioning')));
         }
 
         // Get site ID
         $site_id = sanitize_text_field($_POST['site_id']);
 
         if (empty($site_id)) {
-            wp_send_json_error(array('message' => __('Site ID is required', 'iwp-wp-integration')));
+            wp_send_json_error(array('message' => __('Site ID is required', 'fluentcart-instawp-provisioning')));
         }
 
         try {
             // Get configured API client
-            $api_client = IWP_Service::get_api_client();
+            $api_client = FCIP_Service::get_api_client();
             if (is_wp_error($api_client)) {
                 wp_send_json_error(array('message' => $api_client->get_error_message()));
             }
@@ -647,7 +647,7 @@ class IWP_Shortcode {
             $this->apply_post_options_update($api_client, $site_id, $response_data);
 
             wp_send_json_success(array(
-                'message' => __('Post options applied successfully', 'iwp-wp-integration'),
+                'message' => __('Post options applied successfully', 'fluentcart-instawp-provisioning'),
                 'post_options_applied' => isset($response_data['post_options_applied']) ? $response_data['post_options_applied'] : false,
                 'warning' => isset($response_data['post_options_warning']) ? $response_data['post_options_warning'] : null
             ));
@@ -693,34 +693,34 @@ class IWP_Shortcode {
         if (!is_admin()) {
             // Enqueue CSS
             wp_enqueue_style(
-                'instawp-integration-shortcode-css',
-                IWP_PLUGIN_URL . 'assets/css/frontend.css',
+                'fcip-shortcode-css',
+                FCIP_PLUGIN_URL . 'assets/css/frontend.css',
                 array(),
                 '1.0.0'
             );
             
             // Enqueue JavaScript
             wp_enqueue_script(
-                'instawp-integration-shortcode', 
-                IWP_PLUGIN_URL . 'assets/js/shortcode.js', 
+                'fcip-shortcode', 
+                FCIP_PLUGIN_URL . 'assets/js/shortcode.js', 
                 array('jquery'), 
                 '1.0.0', 
                 true
             );
 
-            wp_localize_script('instawp-integration-shortcode', 'iwp_shortcode_ajax', array(
+            wp_localize_script('fcip-shortcode', 'fcip_shortcode_ajax', array(
                 'ajax_url' => admin_url('admin-ajax.php'),
-                'app_url' => IWP_PLUGIN_APP_URL,
-                'nonce_check_status' => wp_create_nonce('iwp_check_task_status'),
-                'nonce_apply_post_options' => wp_create_nonce('iwp_apply_delayed_post_options'),
+                'app_url' => FCIP_PLUGIN_APP_URL,
+                'nonce_check_status' => wp_create_nonce('fcip_check_task_status'),
+                'nonce_apply_post_options' => wp_create_nonce('fcip_apply_delayed_post_options'),
                 'messages' => array(
-                    'creating' => __('Creating your site...', 'iwp-wp-integration'),
-                    'checking_status' => __('Checking site status...', 'iwp-wp-integration'),
-                    'finalizing' => __('Finalizing site setup...', 'iwp-wp-integration'),
-                    'copy_success' => __('Copied to clipboard!', 'iwp-wp-integration'),
-                    'copy_error' => __('Failed to copy', 'iwp-wp-integration'),
-                    'show_password' => __('Show', 'iwp-wp-integration'),
-                    'hide_password' => __('Hide', 'iwp-wp-integration')
+                    'creating' => __('Creating your site...', 'fluentcart-instawp-provisioning'),
+                    'checking_status' => __('Checking site status...', 'fluentcart-instawp-provisioning'),
+                    'finalizing' => __('Finalizing site setup...', 'fluentcart-instawp-provisioning'),
+                    'copy_success' => __('Copied to clipboard!', 'fluentcart-instawp-provisioning'),
+                    'copy_error' => __('Failed to copy', 'fluentcart-instawp-provisioning'),
+                    'show_password' => __('Show', 'fluentcart-instawp-provisioning'),
+                    'hide_password' => __('Hide', 'fluentcart-instawp-provisioning')
                 )
             ));
         }
@@ -734,7 +734,7 @@ class IWP_Shortcode {
     private function has_shortcode_on_page() {
         global $post;
         
-        if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'iwp_site_creator')) {
+        if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'fcip_site_creator')) {
             return true;
         }
         

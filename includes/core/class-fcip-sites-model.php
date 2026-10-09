@@ -1,6 +1,6 @@
 <?php
 /**
- * Sites Model for InstaWP Integration
+ * Sites Model for FluentCart InstaWP Provisioning
  */
 
 // Prevent direct access
@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class IWP_Sites_Model {
+class FCIP_Sites_Model {
     /**
      * Status value used to mark a site as soft-deleted (visible under the
      * admin Trash filter, hidden from customer-facing surfaces).
@@ -82,7 +82,7 @@ class IWP_Sites_Model {
 
     public static function init() {
         global $wpdb;
-        self::$table_name = $wpdb->prefix . 'iwp_sites';
+        self::$table_name = $wpdb->prefix . 'fcip_sites';
     }
 
     public static function create($data) {
@@ -132,7 +132,7 @@ class IWP_Sites_Model {
 
         // Explicit $format overrides WP core's field_types['site_id']='%d'
         // lookup (see $column_formats docblock above) so the "pending-XYZ"
-        // placeholder used by IWP_Site_Manager::create_site_with_tracking
+        // placeholder used by FCIP_Site_Manager::create_site_with_tracking
         // stores as the actual string instead of being cast to integer 0.
         $result = $wpdb->insert(
             self::$table_name,
@@ -141,7 +141,7 @@ class IWP_Sites_Model {
         );
 
         if ($result === false) {
-            IWP_Logger::error('Failed to create site record', 'sites-model', array('error' => $wpdb->last_error));
+            FCIP_Logger::error('Failed to create site record', 'sites-model', array('error' => $wpdb->last_error));
             return false;
         }
 
@@ -151,8 +151,8 @@ class IWP_Sites_Model {
     public static function update($site_id, $data) {
         global $wpdb;
         
-        IWP_Logger::debug('sites model update() - Called with site_id: ' . $site_id, 'sites-model');
-        IWP_Logger::debug('sites model update() - data', 'sites-model', $data);
+        FCIP_Logger::debug('sites model update() - Called with site_id: ' . $site_id, 'sites-model');
+        FCIP_Logger::debug('sites model update() - data', 'sites-model', $data);
         
         if (!self::$table_name) {
             self::init();
@@ -164,7 +164,7 @@ class IWP_Sites_Model {
             if (is_array($value)) {
                 // JSON encode array values for database storage
                 $sanitized_data[$key] = wp_json_encode($value);
-                IWP_Logger::debug('sites model update() - Converted array field "' . $key . '" to JSON', 'sites-model');
+                FCIP_Logger::debug('sites model update() - Converted array field "' . $key . '" to JSON', 'sites-model');
             } else {
                 $sanitized_data[$key] = $value;
             }
@@ -172,7 +172,7 @@ class IWP_Sites_Model {
         
         $sanitized_data['updated_at'] = current_time('mysql');
 
-        IWP_Logger::debug('sites model update() - About to call wpdb->update with sanitized data', 'sites-model');
+        FCIP_Logger::debug('sites model update() - About to call wpdb->update with sanitized data', 'sites-model');
 
         // Explicit $format (4th arg) and $where_format (5th arg) both
         // override WP core's field_types['site_id']='%d' lookup. Without
@@ -189,14 +189,14 @@ class IWP_Sites_Model {
             self::format_for_data($sanitized_data),
             array('%s')
         );
-        IWP_Logger::debug('sites model update() - wpdb->update result: ' . ($result !== false ? 'SUCCESS' : 'FAILED'), 'sites-model');
+        FCIP_Logger::debug('sites model update() - wpdb->update result: ' . ($result !== false ? 'SUCCESS' : 'FAILED'), 'sites-model');
 
         // The line above is debug level, so a failure would be invisible on a
         // default install. update() only returns false to the caller, so
         // without this the row silently not updating leaves no trace. Mirrors
         // the error log in create().
         if ($result === false) {
-            IWP_Logger::error('Failed to update site record', 'sites-model', array(
+            FCIP_Logger::error('Failed to update site record', 'sites-model', array(
                 'site_id' => $site_id,
                 'error'   => $wpdb->last_error,
             ));
@@ -260,7 +260,7 @@ class IWP_Sites_Model {
      * removes the row entirely, see delete() below.
      *
      * @param string              $site_id    InstaWP site identifier.
-     * @param IWP_API_Client|null $api_client Optional configured client; if
+     * @param FCIP_API_Client|null $api_client Optional configured client; if
      *                                        provided, delete_site() is
      *                                        called before the local status
      *                                        update.
@@ -271,7 +271,11 @@ class IWP_Sites_Model {
             return false;
         }
 
-        if ($api_client instanceof IWP_API_Client) {
+        if (!self::get_by_site_id($site_id)) {
+            return false;
+        }
+
+        if ($api_client instanceof FCIP_API_Client) {
             $api_client->delete_site($site_id);
         }
 
@@ -279,33 +283,13 @@ class IWP_Sites_Model {
             return self::update($site_id, array('status' => self::STATUS_TRASHED));
         }
 
-        // Orphan: site lives only in order meta. Record a deletion marker
-        // populated with whatever metadata we can recover from the order
-        // entry (URL, credentials, order, customer, dates) so the Trash
-        // view at admin.php?page=instawp-sites&status=trashed shows
-        // meaningful details instead of an empty row with just the site_id.
-        // Tombstone-specific fields (site_id, status, source) overwrite
-        // anything the recovery returned for those keys.
-        $tombstone = array_merge(
-            self::collect_orphan_metadata($site_id),
-            array(
-                'site_id' => $site_id,
-                'status'  => self::STATUS_TRASHED,
-                'source'  => 'order_meta',
-            )
-        );
-
-        return (bool) self::create($tombstone);
-    }
-
-    private static function collect_orphan_metadata($site_id) {
-        return array();
+        return false;
     }
 
     /**
      * Permanently remove the site row. **Bypasses the Trash filter.**
      *
-     * Use IWP_Sites_Model::trash($site_id) for the standard admin delete
+     * Use FCIP_Sites_Model::trash($site_id) for the standard admin delete
      * flow; only call this for cleanup of already-trashed entries (e.g. a
      * future "Empty Trash" workflow).
      *
@@ -359,20 +343,20 @@ class IWP_Sites_Model {
         $sql = "SELECT COUNT(*) FROM " . self::$table_name . " " . $where_sql;
 
         if (!empty($where_values)) {
-            IWP_Logger::debug('sites model count() - where values', 'sites-model', $where_values);
-            IWP_Logger::debug('sites model count() - SQL: ' . $sql, 'sites-model');
-            IWP_Logger::debug('sites model count() - Values type check: is_array=' . (is_array($where_values) ? 'YES' : 'NO') . ', count=' . (is_array($where_values) ? count($where_values) : 'N/A'), 'sites-model');
+            FCIP_Logger::debug('sites model count() - where values', 'sites-model', $where_values);
+            FCIP_Logger::debug('sites model count() - SQL: ' . $sql, 'sites-model');
+            FCIP_Logger::debug('sites model count() - Values type check: is_array=' . (is_array($where_values) ? 'YES' : 'NO') . ', count=' . (is_array($where_values) ? count($where_values) : 'N/A'), 'sites-model');
             
             try {
                 $prepared_sql = $wpdb->prepare($sql, $where_values);
-                IWP_Logger::debug('sites model count() - SQL prepared successfully', 'sites-model');
+                FCIP_Logger::debug('sites model count() - SQL prepared successfully', 'sites-model');
                 return intval($wpdb->get_var($prepared_sql));
             } catch (Exception $e) {
-                IWP_Logger::error('sites model count() - Exception during prepare: ' . $e->getMessage(), 'sites-model');
+                FCIP_Logger::error('sites model count() - Exception during prepare: ' . $e->getMessage(), 'sites-model');
                 throw $e;
             }
         } else {
-            IWP_Logger::debug('sites model count() - No where values, executing raw SQL', 'sites-model');
+            FCIP_Logger::debug('sites model count() - No where values, executing raw SQL', 'sites-model');
             return intval($wpdb->get_var($sql));
         }
     }
@@ -396,11 +380,7 @@ class IWP_Sites_Model {
         $current_site = self::get_by_site_id($site_id);
         
         if (!$current_site) {
-            IWP_Logger::warning('Site not found for plan upgrade, creating new entry', 'sites-model', array(
-                'site_id' => $site_id,
-                'new_plan_id' => $new_plan_id
-            ));
-            return self::create_from_upgrade($site_id, $new_plan_id, $upgrade_data);
+            return false;
         }
 
         // Prepare upgrade history
@@ -472,82 +452,20 @@ class IWP_Sites_Model {
         );
 
         if ($result !== false) {
-            IWP_Logger::info('Site plan updated successfully', 'sites-model', array(
+            FCIP_Logger::info('Site plan updated successfully', 'sites-model', array(
                 'site_id' => $site_id,
                 'previous_plan' => $current_site->plan_id,
                 'new_plan' => $new_plan_id
             ));
             return true;
         } else {
-            IWP_Logger::error('Failed to update site plan', 'sites-model', array(
+            FCIP_Logger::error('Failed to update site plan', 'sites-model', array(
                 'site_id' => $site_id,
                 'new_plan_id' => $new_plan_id,
                 'error' => $wpdb->last_error
             ));
             return false;
         }
-    }
-
-    /**
-     * Create new site entry from upgrade data (for sites not in database)
-     *
-     * @param string $site_id InstaWP site ID
-     * @param string $plan_id Plan ID
-     * @param array $upgrade_data Upgrade data
-     * @return bool Success status
-     */
-    public static function create_from_upgrade($site_id, $plan_id, $upgrade_data = array()) {
-        $site_data = array(
-            'site_id' => $site_id,
-            'plan_id' => $plan_id,
-            'status' => 'completed', // Upgrades are only done on completed sites
-            'source' => 'upgrade',
-            'order_id' => isset($upgrade_data['order_id']) ? intval($upgrade_data['order_id']) : null,
-            'product_id' => isset($upgrade_data['product_id']) ? intval($upgrade_data['product_id']) : null,
-            'user_id' => isset($upgrade_data['customer_id']) ? intval($upgrade_data['customer_id']) : 0
-        );
-
-        // Add site details if available from the upgrade response
-        if (isset($upgrade_data['site_url'])) {
-            $site_data['site_url'] = $upgrade_data['site_url'];
-        }
-        if (isset($upgrade_data['wp_username'])) {
-            $site_data['wp_username'] = $upgrade_data['wp_username'];
-        }
-        if (isset($upgrade_data['wp_password'])) {
-            $site_data['wp_password'] = $upgrade_data['wp_password'];
-        }
-        if (isset($upgrade_data['s_hash'])) {
-            $site_data['s_hash'] = $upgrade_data['s_hash'];
-        }
-
-        // Mark that this was created from an upgrade
-        $api_response_data = array(
-            'created_from_upgrade' => true,
-            'upgrade_history' => array(
-                array(
-                    'previous_plan_id' => null,
-                    'new_plan_id' => $plan_id,
-                    'upgraded_at' => current_time('mysql'),
-                    'order_id' => isset($upgrade_data['order_id']) ? $upgrade_data['order_id'] : null,
-                    'upgrade_response' => isset($upgrade_data['upgrade_response']) ? $upgrade_data['upgrade_response'] : null
-                )
-            )
-        );
-        $site_data['api_response'] = $api_response_data;
-
-        $db_site_id = self::create($site_data);
-        
-        if ($db_site_id) {
-            IWP_Logger::info('Created new site record from upgrade', 'sites-model', array(
-                'site_id' => $site_id,
-                'plan_id' => $plan_id,
-                'db_id' => $db_site_id
-            ));
-            return true;
-        }
-        
-        return false;
     }
 
     /**
@@ -682,7 +600,7 @@ class IWP_Sites_Model {
         );
 
         if ($result !== false && $result > 0) {
-            IWP_Logger::info('Marked expired demo sites', 'sites-model', array(
+            FCIP_Logger::info('Marked expired demo sites', 'sites-model', array(
                 'count' => $result
             ));
         }

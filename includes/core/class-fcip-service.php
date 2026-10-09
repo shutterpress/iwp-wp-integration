@@ -2,8 +2,8 @@
 /**
  * Centralized InstaWP Service Helper Class
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,16 +12,16 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_Service class
+ * FCIP_Service class
  * 
  * Centralized service for InstaWP API operations with caching and error handling
  */
-class IWP_Service {
+class FCIP_Service {
 
     /**
      * API Client instance
      *
-     * @var IWP_API_Client
+     * @var FCIP_API_Client
      */
     private static $api_client = null;
 
@@ -35,11 +35,11 @@ class IWP_Service {
     /**
      * Get API client instance
      *
-     * @return IWP_API_Client|WP_Error
+     * @return FCIP_API_Client|WP_Error
      */
     public static function get_api_client() {
         if (self::$api_client === null) {
-            self::$api_client = new IWP_API_Client();
+            self::$api_client = new FCIP_API_Client();
             
             $api_key = self::get_api_key();
             if (is_wp_error($api_key)) {
@@ -62,7 +62,7 @@ class IWP_Service {
         $api_key = isset($options['api_key']) ? $options['api_key'] : '';
         
         if (empty($api_key)) {
-            return new WP_Error('no_api_key', __('API key not configured. Please configure it in plugin settings.', 'iwp-wp-integration'));
+            return new WP_Error('no_api_key', __('API key not configured. Please configure it in plugin settings.', 'fluentcart-instawp-provisioning'));
         }
         
         return $api_key;
@@ -75,7 +75,7 @@ class IWP_Service {
      */
     private static function get_plugin_options() {
         if (self::$plugin_options === null) {
-            self::$plugin_options = get_option('iwp_options', array());
+            self::$plugin_options = get_option('fcip_options', array());
         }
         
         return self::$plugin_options;
@@ -87,13 +87,13 @@ class IWP_Service {
      * @return array
      */
     public static function get_snapshots_for_dropdown() {
-        $options = array('' => __('Select a snapshot...', 'iwp-wp-integration'));
+        $options = array('' => __('Select a snapshot...', 'fluentcart-instawp-provisioning'));
         
         $snapshots = self::get_snapshots();
         
         if (is_wp_error($snapshots)) {
-            IWP_Logger::error('Error fetching snapshots for dropdown', 'service', array('error' => $snapshots->get_error_message()));
-            $options[''] = __('Error loading snapshots', 'iwp-wp-integration');
+            FCIP_Logger::error('Error fetching snapshots for dropdown', 'service', array('error' => $snapshots->get_error_message()));
+            $options[''] = __('Error loading snapshots', 'fluentcart-instawp-provisioning');
             return $options;
         }
         
@@ -104,10 +104,10 @@ class IWP_Service {
                     $options[$snapshot['slug']] = sanitize_text_field($snapshot['name']);
                 }
             }
-            IWP_Logger::info('Loaded snapshots for dropdown', 'service', array('count' => count($snapshots)));
+            FCIP_Logger::info('Loaded snapshots for dropdown', 'service', array('count' => count($snapshots)));
         } else {
-            IWP_Logger::warning('No snapshots data found in API response', 'service');
-            $options[''] = __('No snapshots available', 'iwp-wp-integration');
+            FCIP_Logger::warning('No snapshots data found in API response', 'service');
+            $options[''] = __('No snapshots available', 'fluentcart-instawp-provisioning');
         }
         
         return $options;
@@ -119,13 +119,13 @@ class IWP_Service {
      * @return array
      */
     public static function get_plans_for_dropdown() {
-        $options = array('' => __('Select a plan...', 'iwp-wp-integration'));
+        $options = array('' => __('Select a plan...', 'fluentcart-instawp-provisioning'));
         
         $plans = self::get_plans();
         
         if (is_wp_error($plans)) {
-            IWP_Logger::error('Error fetching plans for dropdown', 'service', array('error' => $plans->get_error_message()));
-            $options[''] = __('Error loading plans', 'iwp-wp-integration');
+            FCIP_Logger::error('Error fetching plans for dropdown', 'service', array('error' => $plans->get_error_message()));
+            $options[''] = __('Error loading plans', 'fluentcart-instawp-provisioning');
             return $options;
         }
         
@@ -142,10 +142,10 @@ class IWP_Service {
                     $plan_count++;
                 }
             }
-            IWP_Logger::info('Loaded plans for dropdown', 'service', array('count' => $plan_count));
+            FCIP_Logger::info('Loaded plans for dropdown', 'service', array('count' => $plan_count));
         } else {
-            IWP_Logger::warning('No plans data found in API response', 'service');
-            $options[''] = __('No plans available', 'iwp-wp-integration');
+            FCIP_Logger::warning('No plans data found in API response', 'service');
+            $options[''] = __('No plans available', 'fluentcart-instawp-provisioning');
         }
         
         return $options;
@@ -266,11 +266,11 @@ class IWP_Service {
 
             return $api_client->get_site_details($site_id);
         } catch (\Throwable $e) {
-            IWP_Logger::error('Fetching site details threw an exception', 'service', array(
+            FCIP_Logger::error('Fetching site details threw an exception', 'service', array(
                 'site_id' => $site_id,
                 'error' => $e->getMessage()
             ));
-            return new WP_Error('site_details_failed', __('Server error, please re-try later.', 'iwp-wp-integration'));
+            return new WP_Error('site_details_failed', __('Server error, please re-try later.', 'fluentcart-instawp-provisioning'));
         }
     }
 
@@ -292,11 +292,11 @@ class IWP_Service {
         } catch (\Throwable $e) {
             // Never let a fatal escape into the AJAX handler -- log it and hand
             // back the WP_Error shape every caller already branches on.
-            IWP_Logger::error('Site cache purge threw an exception', 'service', array(
+            FCIP_Logger::error('Site cache purge threw an exception', 'service', array(
                 'site_id' => $site_id,
                 'error' => $e->getMessage()
             ));
-            return new WP_Error('purge_cache_failed', __('Server error, please re-try later.', 'iwp-wp-integration'));
+            return new WP_Error('purge_cache_failed', __('Server error, please re-try later.', 'fluentcart-instawp-provisioning'));
         }
     }
 
@@ -340,7 +340,7 @@ class IWP_Service {
         if (is_wp_error($site_details)) {
             return new WP_Error(
                 'site_details_failed',
-                sprintf(__('Failed to get site details: %s', 'iwp-wp-integration'), $site_details->get_error_message()),
+                sprintf(__('Failed to get site details: %s', 'fluentcart-instawp-provisioning'), $site_details->get_error_message()),
                 array('site_id' => $site_id)
             );
         }
@@ -348,11 +348,11 @@ class IWP_Service {
         // Check current reservation status
         $details = $site_details['data'] ?? $site_details;
         if (!is_array($details) || !array_key_exists('is_reserved', $details)) {
-            return new WP_Error('reservation_status_missing', __('Cannot determine the current site reservation status.', 'iwp-wp-integration'));
+            return new WP_Error('reservation_status_missing', __('Cannot determine the current site reservation status.', 'fluentcart-instawp-provisioning'));
         }
         $current_is_reserved = filter_var($details['is_reserved'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         if ($current_is_reserved === null) {
-            return new WP_Error('reservation_status_invalid', __('The site reservation status is invalid.', 'iwp-wp-integration'));
+            return new WP_Error('reservation_status_invalid', __('The site reservation status is invalid.', 'fluentcart-instawp-provisioning'));
         }
         $desired_is_reserved = (bool) $permanent;
         
@@ -361,8 +361,8 @@ class IWP_Service {
             return array(
                 'success' => true,
                 'message' => sprintf(
-                    __('Site is already %s', 'iwp-wp-integration'),
-                    $permanent ? __('permanent', 'iwp-wp-integration') : __('temporary', 'iwp-wp-integration')
+                    __('Site is already %s', 'fluentcart-instawp-provisioning'),
+                    $permanent ? __('permanent', 'fluentcart-instawp-provisioning') : __('temporary', 'fluentcart-instawp-provisioning')
                 ),
                 'site_id' => $site_id,
                 'is_reserved' => $current_is_reserved,
@@ -377,25 +377,25 @@ class IWP_Service {
         if (is_wp_error($toggle_result)) {
             return new WP_Error(
                 'reservation_toggle_failed',
-                sprintf(__('Failed to toggle site reservation: %s', 'iwp-wp-integration'), $toggle_result->get_error_message()),
+                sprintf(__('Failed to toggle site reservation: %s', 'fluentcart-instawp-provisioning'), $toggle_result->get_error_message()),
                 array('site_id' => $site_id, 'desired_permanent' => $permanent)
             );
         }
         
         // If changing from temporary to permanent, disable demo helper plugin
         if ($permanent && !$current_is_reserved) {
-            IWP_Logger::info('Site changed from temporary to permanent, disabling demo helper', 'service', array('site_id' => $site_id));
+            FCIP_Logger::info('Site changed from temporary to permanent, disabling demo helper', 'service', array('site_id' => $site_id));
             
             $demo_disable_result = $api_client->disable_demo_helper($site_id);
             
             if (is_wp_error($demo_disable_result)) {
-                IWP_Logger::warning('Failed to disable demo helper after status change', 'service', array(
+                FCIP_Logger::warning('Failed to disable demo helper after status change', 'service', array(
                     'site_id' => $site_id,
                     'error' => $demo_disable_result->get_error_message()
                 ));
                 // Don't fail the reservation change if demo helper disable fails
             } else {
-                IWP_Logger::info('Demo helper disabled after status change', 'service', array(
+                FCIP_Logger::info('Demo helper disabled after status change', 'service', array(
                     'site_id' => $site_id,
                     'result' => $demo_disable_result['message']
                 ));
@@ -406,8 +406,8 @@ class IWP_Service {
         return array(
             'success' => true,
             'message' => sprintf(
-                __('Site changed to %s', 'iwp-wp-integration'),
-                $permanent ? __('permanent', 'iwp-wp-integration') : __('temporary', 'iwp-wp-integration')
+                __('Site changed to %s', 'fluentcart-instawp-provisioning'),
+                $permanent ? __('permanent', 'fluentcart-instawp-provisioning') : __('temporary', 'fluentcart-instawp-provisioning')
             ),
             'site_id' => $site_id,
             'is_reserved' => $desired_is_reserved,
@@ -437,15 +437,14 @@ class IWP_Service {
      * Clear all caches
      */
     public static function clear_caches() {
-        delete_transient('iwp_snapshots');
-        delete_transient('iwp_plans');
-        delete_transient('iwp_templates'); // Legacy compatibility
+        delete_transient('fcip_snapshots');
+        delete_transient('fcip_plans');
         
         // Reset cached options
         self::$plugin_options = null;
         self::$api_client = null;
         
-        IWP_Logger::info('All caches cleared via service helper', 'service');
+        FCIP_Logger::info('All caches cleared via service helper', 'service');
     }
 
     /**
@@ -454,7 +453,7 @@ class IWP_Service {
      * @return array|WP_Error
      */
     public static function refresh_snapshots() {
-        delete_transient('iwp_snapshots');
+        delete_transient('fcip_snapshots');
         return self::get_snapshots();
     }
 
@@ -464,7 +463,7 @@ class IWP_Service {
      * @return array|WP_Error
      */
     public static function refresh_plans() {
-        delete_transient('iwp_plans');
+        delete_transient('fcip_plans');
         return self::get_plans();
     }
 
@@ -519,7 +518,7 @@ class IWP_Service {
      * @return array|WP_Error
      */
     public static function refresh_teams() {
-        delete_transient('iwp_teams');
+        delete_transient('fcip_teams');
         return self::get_teams();
     }
 
@@ -529,13 +528,13 @@ class IWP_Service {
      * @return array
      */
     public static function get_teams_for_dropdown() {
-        $options = array('' => __('User\'s Logged In Team', 'iwp-wp-integration'));
+        $options = array('' => __('User\'s Logged In Team', 'fluentcart-instawp-provisioning'));
         
         $teams = self::get_teams();
         
         if (is_wp_error($teams)) {
-            IWP_Logger::error('Error fetching teams for dropdown', 'service', array('error' => $teams->get_error_message()));
-            $options[''] = __('Error loading teams', 'iwp-wp-integration');
+            FCIP_Logger::error('Error fetching teams for dropdown', 'service', array('error' => $teams->get_error_message()));
+            $options[''] = __('Error loading teams', 'fluentcart-instawp-provisioning');
             return $options;
         }
         
@@ -545,10 +544,10 @@ class IWP_Service {
                     $options[$team['id']] = sanitize_text_field($team['name']);
                 }
             }
-            IWP_Logger::info('Loaded teams for dropdown', 'service', array('count' => count($teams['data'])));
+            FCIP_Logger::info('Loaded teams for dropdown', 'service', array('count' => count($teams['data'])));
         } else {
-            IWP_Logger::warning('No teams data found in API response', 'service');
-            $options[''] = __('No teams available', 'iwp-wp-integration');
+            FCIP_Logger::warning('No teams data found in API response', 'service');
+            $options[''] = __('No teams available', 'fluentcart-instawp-provisioning');
         }
         
         return $options;
@@ -561,14 +560,14 @@ class IWP_Service {
      * @return bool
      */
     public static function set_selected_team($team_id) {
-        $options = get_option('iwp_options', array());
+        $options = get_option('fcip_options', array());
         $old_team_id = isset($options['selected_team_id']) ? $options['selected_team_id'] : null;
         $new_team_id = $team_id ? intval($team_id) : null;
         
         // Update the option
         $options['selected_team_id'] = $new_team_id;
         
-        IWP_Logger::debug('Setting selected team', 'service', array(
+        FCIP_Logger::debug('Setting selected team', 'service', array(
             'old_team_id' => $old_team_id, 
             'new_team_id' => $new_team_id,
             'options_before' => $options
@@ -577,22 +576,22 @@ class IWP_Service {
         // Bypass WordPress settings API sanitization by temporarily removing the filter
         // This prevents the sanitize_settings callback from interfering with AJAX updates
         $sanitize_callback = null;
-        if (has_filter('sanitize_option_iwp_options')) {
+        if (has_filter('sanitize_option_fcip_options')) {
             global $wp_filter;
-            if (isset($wp_filter['sanitize_option_iwp_options'])) {
-                $sanitize_callback = $wp_filter['sanitize_option_iwp_options'];
-                unset($wp_filter['sanitize_option_iwp_options']);
+            if (isset($wp_filter['sanitize_option_fcip_options'])) {
+                $sanitize_callback = $wp_filter['sanitize_option_fcip_options'];
+                unset($wp_filter['sanitize_option_fcip_options']);
             }
         }
         
-        $result = update_option('iwp_options', $options);
+        $result = update_option('fcip_options', $options);
         
         // Restore the sanitization callback
         if ($sanitize_callback !== null) {
-            $wp_filter['sanitize_option_iwp_options'] = $sanitize_callback;
+            $wp_filter['sanitize_option_fcip_options'] = $sanitize_callback;
         }
         
-        IWP_Logger::debug('Update option result', 'service', array(
+        FCIP_Logger::debug('Update option result', 'service', array(
             'result' => $result,
             'team_id' => $new_team_id,
             'options_serialized_length' => strlen(serialize($options))
@@ -600,10 +599,10 @@ class IWP_Service {
         
         // WordPress update_option returns false if the value hasn't changed
         // So we need to check if the value was actually set correctly
-        $updated_options = get_option('iwp_options', array());
+        $updated_options = get_option('fcip_options', array());
         $actually_set = isset($updated_options['selected_team_id']) && $updated_options['selected_team_id'] === $new_team_id;
         
-        IWP_Logger::debug('Verification check', 'service', array(
+        FCIP_Logger::debug('Verification check', 'service', array(
             'updated_options_has_team_id' => isset($updated_options['selected_team_id']),
             'updated_team_id_value' => isset($updated_options['selected_team_id']) ? $updated_options['selected_team_id'] : 'NOT_SET',
             'new_team_id' => $new_team_id,
@@ -615,7 +614,7 @@ class IWP_Service {
         $success = $actually_set || ($result !== false);
         
         if ($success) {
-            IWP_Logger::info('Selected team updated successfully', 'service', array(
+            FCIP_Logger::info('Selected team updated successfully', 'service', array(
                 'team_id' => $new_team_id,
                 'update_result' => $result,
                 'verified' => $actually_set
@@ -626,7 +625,7 @@ class IWP_Service {
                 self::clear_team_caches($new_team_id);
             }
         } else {
-            IWP_Logger::error('Failed to set selected team', 'service', array(
+            FCIP_Logger::error('Failed to set selected team', 'service', array(
                 'team_id' => $new_team_id,
                 'update_result' => $result,
                 'verified' => $actually_set,
@@ -643,7 +642,7 @@ class IWP_Service {
      * @return int|null
      */
     public static function get_selected_team() {
-        $options = get_option('iwp_options', array());
+        $options = get_option('fcip_options', array());
         return isset($options['selected_team_id']) ? intval($options['selected_team_id']) : null;
     }
 
@@ -654,14 +653,14 @@ class IWP_Service {
      */
     private static function clear_team_caches($team_id = null) {
         if ($team_id) {
-            delete_transient('iwp_snapshots_team_' . $team_id);
-            delete_transient('iwp_plans_team_' . $team_id);
+            delete_transient('fcip_snapshots_team_' . $team_id);
+            delete_transient('fcip_plans_team_' . $team_id);
         } else {
-            delete_transient('iwp_snapshots');
-            delete_transient('iwp_plans');
+            delete_transient('fcip_snapshots');
+            delete_transient('fcip_plans');
         }
         
-        IWP_Logger::debug('Team-specific caches cleared', 'service', array('team_id' => $team_id));
+        FCIP_Logger::debug('Team-specific caches cleared', 'service', array('team_id' => $team_id));
     }
 
     /**
@@ -687,7 +686,7 @@ class IWP_Service {
         );
         
         if (!self::is_api_configured()) {
-            $status['error'] = __('API key not configured', 'iwp-wp-integration');
+            $status['error'] = __('API key not configured', 'fluentcart-instawp-provisioning');
             return $status;
         }
         
@@ -721,7 +720,7 @@ class IWP_Service {
         );
         
         // Check snapshots cache
-        $cached_snapshots = get_transient('iwp_snapshots');
+        $cached_snapshots = get_transient('fcip_snapshots');
         if ($cached_snapshots !== false) {
             $status['snapshots'] = true;
             if (isset($cached_snapshots['data']) && is_array($cached_snapshots['data'])) {
@@ -729,7 +728,7 @@ class IWP_Service {
             }
             
             // Get expiration info
-            $timeout = get_option('_transient_timeout_iwp_snapshots');
+            $timeout = get_option('_transient_timeout_fcip_snapshots');
             if ($timeout) {
                 $status['snapshots_expires'] = $timeout;
                 $status['snapshots_age'] = time() - ($timeout - (15 * MINUTE_IN_SECONDS));
@@ -737,7 +736,7 @@ class IWP_Service {
         }
         
         // Check plans cache
-        $cached_plans = get_transient('iwp_plans');
+        $cached_plans = get_transient('fcip_plans');
         if ($cached_plans !== false) {
             $status['plans'] = true;
             if (is_array($cached_plans)) {
@@ -749,7 +748,7 @@ class IWP_Service {
             }
             
             // Get expiration info
-            $timeout = get_option('_transient_timeout_iwp_plans');
+            $timeout = get_option('_transient_timeout_fcip_plans');
             if ($timeout) {
                 $status['plans_expires'] = $timeout;
                 $status['plans_age'] = time() - ($timeout - HOUR_IN_SECONDS);
@@ -813,12 +812,12 @@ class IWP_Service {
     private static function get_cache_memory_usage() {
         $usage = 0;
         
-        $cached_snapshots = get_transient('iwp_snapshots');
+        $cached_snapshots = get_transient('fcip_snapshots');
         if ($cached_snapshots !== false) {
             $usage += strlen(serialize($cached_snapshots));
         }
         
-        $cached_plans = get_transient('iwp_plans');
+        $cached_plans = get_transient('fcip_plans');
         if ($cached_plans !== false) {
             $usage += strlen(serialize($cached_plans));
         }

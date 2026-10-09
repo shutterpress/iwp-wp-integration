@@ -2,8 +2,8 @@
 /**
  * Logger Helper Class
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,11 +12,11 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_Logger class
+ * FCIP_Logger class
  * 
  * Centralized logging with consistent formatting and context
  */
-class IWP_Logger {
+class FCIP_Logger {
 
     /**
      * Log levels
@@ -56,7 +56,7 @@ class IWP_Logger {
      */
     private static function init() {
         if (self::$debug_enabled === null) {
-            $options = IWP_Database::get_plugin_options();
+            $options = FCIP_Database::get_plugin_options();
             self::$debug_enabled = isset($options['debug_mode']) && $options['debug_mode'] === 'yes';
             self::$log_level = isset($options['log_level']) ? $options['log_level'] : self::LEVEL_INFO;
         }
@@ -165,7 +165,7 @@ class IWP_Logger {
         $timestamp = current_time('Y-m-d H:i:s');
         $level_upper = strtoupper($level);
 
-        $formatted = "[{$timestamp}] IWP FluentCart V2 [{$level_upper}]";
+        $formatted = "[{$timestamp}] FCIP FluentCart V2 [{$level_upper}]";
 
         if (!empty($context)) {
             $formatted .= " [{$context}]";
@@ -223,7 +223,7 @@ class IWP_Logger {
             // A logging failure must never break the request that triggered
             // it. This is the one place that cannot report through the logger
             // itself, so it writes directly.
-            error_log('IWP FluentCart V2 [ERROR] [logger]: logging failed - ' . $e->getMessage());
+            error_log('FCIP FluentCart V2 [ERROR] [logger]: logging failed - ' . $e->getMessage());
         }
     }
 
@@ -327,7 +327,7 @@ class IWP_Logger {
         self::warning($event, $context, $log_data);
         
         // Also use security helper for consistent security logging
-        IWP_Security::log_security_event($event, $context_data);
+        FCIP_Security::log_security_event($event, $context_data);
     }
 
     /**
@@ -423,11 +423,11 @@ class IWP_Logger {
             fclose($handle);
             
             $lines_array = explode("\n", $content);
-            $iwp_logs = array_filter($lines_array, function($line) {
-                return strpos($line, 'IWP FluentCart V2') !== false;
+            $fcip_logs = array_filter($lines_array, function($line) {
+                return strpos($line, 'FCIP FluentCart V2') !== false;
             });
             
-            $logs = array_slice(array_reverse($iwp_logs), 0, $lines);
+            $logs = array_slice(array_reverse($fcip_logs), 0, $lines);
         }
 
         return $logs;
@@ -489,9 +489,9 @@ class IWP_Logger {
             }
 
             // Also log to database for better tracking
-            IWP_Database::log_activity('site_creation', $event, $site_data, $order_id);
+            FCIP_Database::log_activity('site_creation', $event, $site_data, $order_id);
         } catch (\Throwable $e) {
-            error_log('IWP FluentCart V2 [ERROR] [logger]: site_creation logging failed - ' . $e->getMessage());
+            error_log('FCIP FluentCart V2 [ERROR] [logger]: site_creation logging failed - ' . $e->getMessage());
         }
     }
 
@@ -520,9 +520,9 @@ class IWP_Logger {
             }
 
             // Log to database
-            IWP_Database::log_activity('order_processing', $event, $order_data, $order_id);
+            FCIP_Database::log_activity('order_processing', $event, $order_data, $order_id);
         } catch (\Throwable $e) {
-            error_log('IWP FluentCart V2 [ERROR] [logger]: order_processing logging failed - ' . $e->getMessage());
+            error_log('FCIP FluentCart V2 [ERROR] [logger]: order_processing logging failed - ' . $e->getMessage());
         }
     }
 
@@ -554,9 +554,9 @@ class IWP_Logger {
             self::info($action, $context, $log_data);
 
             // Log to database
-            IWP_Database::log_activity('admin_action', $action, $context_data);
+            FCIP_Database::log_activity('admin_action', $action, $context_data);
         } catch (\Throwable $e) {
-            error_log('IWP FluentCart V2 [ERROR] [logger]: admin_action logging failed - ' . $e->getMessage());
+            error_log('FCIP FluentCart V2 [ERROR] [logger]: admin_action logging failed - ' . $e->getMessage());
         }
     }
 }

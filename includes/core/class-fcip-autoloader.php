@@ -1,9 +1,9 @@
 <?php
 /**
- * Autoloader for InstaWP Integration Plugin
+ * Autoloader for FluentCart InstaWP Provisioning Plugin
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,9 +12,9 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_Autoloader class
+ * FCIP_Autoloader class
  */
-class IWP_Autoloader {
+class FCIP_Autoloader {
 
     /**
      * Initialize the autoloader
@@ -30,7 +30,7 @@ class IWP_Autoloader {
      */
     public static function autoload($class_name) {
         // Only load classes that start with our prefixes
-        if (strpos($class_name, 'IWP_') !== 0) {
+        if (strpos($class_name, 'FCIP_') !== 0) {
             return;
         }
 
@@ -41,15 +41,10 @@ class IWP_Autoloader {
         // Define possible paths based on class name patterns
         $paths = array();
 
-        $paths[] = IWP_PLUGIN_PATH . 'includes/core/';
-        $paths[] = IWP_PLUGIN_PATH . 'includes/admin/';
-        $paths[] = IWP_PLUGIN_PATH . 'includes/frontend/';
-        $paths[] = IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/';
+        $paths[] = FCIP_PLUGIN_PATH . 'includes/core/';
+        $paths[] = FCIP_PLUGIN_PATH . 'includes/admin/';
+        $paths[] = FCIP_PLUGIN_PATH . 'includes/integrations/fluentcart/';
 
-        // General paths as fallback
-        $paths[] = IWP_PLUGIN_PATH . 'includes/';
-        $paths[] = IWP_PLUGIN_PATH . 'includes/api/';
-        $paths[] = IWP_PLUGIN_PATH . 'includes/integrations/';
 
         // Try to load the file from each path
         foreach ($paths as $path) {
@@ -65,4 +60,4 @@ class IWP_Autoloader {
 }
 
 // Initialize the autoloader
-IWP_Autoloader::init();
+FCIP_Autoloader::init();

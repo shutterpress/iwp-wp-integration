@@ -1,9 +1,9 @@
 document.addEventListener('submit', async (event) => {
     const form = event.target;
-    if (!form.matches('.iwp-fc-setup, .iwp-fc-action')) return;
+    if (!form.matches('.fcip-fc-setup, .fcip-fc-action')) return;
     event.preventDefault();
     const button = event.submitter || form.querySelector('button[type="submit"]');
-    const message = form.querySelector('.iwp-fc-message');
+    const message = form.querySelector('.fcip-fc-message');
     button.disabled = true;
     try {
         const body = new FormData(form);

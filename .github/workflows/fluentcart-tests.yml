@@ -23,7 +23,13 @@ jobs:
         run: php tests/fluentcart.php
       - name: Reservation behavior
         run: php tests/reservations.php
+      - name: Fresh installation and isolation
+        run: php tests/install.php
+      - name: Release package identity
+        run: |
+          bash build-zip.sh /tmp/fluentcart-instawp-provisioning.zip
+          unzip -l /tmp/fluentcart-instawp-provisioning.zip | grep 'fluentcart-instawp-provisioning/fluentcart-instawp-provisioning.php'
       - name: Check removed commerce dependency
-        run: '! grep -REn "IWP_Woo_|wc_get_|wcs_get_|woocommerce_|WC_Subscriptions|class_exists\(.WooCommerce" includes iwp-wp-integration.php assets'
+        run: '! grep -REn "FCIP_Woo_|wc_get_|wcs_get_|woocommerce_|WC_Subscriptions|class_exists\(.WooCommerce" includes fluentcart-instawp-provisioning.php assets'
       - name: JavaScript syntax
         run: find assets/js -name '*.js' -print0 | xargs -0 -n1 node --check

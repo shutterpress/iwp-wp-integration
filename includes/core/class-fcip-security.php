@@ -2,8 +2,8 @@
 /**
  * Enhanced Security Helper Class
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,11 +12,11 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_Security class
+ * FCIP_Security class
  * 
  * Centralized security validation and sanitization methods
  */
-class IWP_Security {
+class FCIP_Security {
 
     /**
      * Validate AJAX request with nonce and capability check
@@ -30,14 +30,14 @@ class IWP_Security {
         // Check nonce
         if (!wp_verify_nonce($_POST[$nonce_field] ?? '', $nonce_action)) {
             wp_send_json_error(array(
-                'message' => __('Security check failed.', 'iwp-wp-integration')
+                'message' => __('Security check failed.', 'fluentcart-instawp-provisioning')
             ));
         }
 
         // Check user capabilities
         if (!current_user_can($capability)) {
             wp_send_json_error(array(
-                'message' => __('Insufficient permissions.', 'iwp-wp-integration')
+                'message' => __('Insufficient permissions.', 'fluentcart-instawp-provisioning')
             ));
         }
 
@@ -55,12 +55,12 @@ class IWP_Security {
     public static function validate_ajax_request_soft($nonce_action, $capability = 'manage_options', $nonce_field = 'nonce') {
         // Check nonce
         if (!wp_verify_nonce($_POST[$nonce_field] ?? '', $nonce_action)) {
-            return new WP_Error('nonce_failed', __('Security check failed.', 'iwp-wp-integration'));
+            return new WP_Error('nonce_failed', __('Security check failed.', 'fluentcart-instawp-provisioning'));
         }
 
         // Check user capabilities
         if (!current_user_can($capability)) {
-            return new WP_Error('insufficient_permissions', __('Insufficient permissions.', 'iwp-wp-integration'));
+            return new WP_Error('insufficient_permissions', __('Insufficient permissions.', 'fluentcart-instawp-provisioning'));
         }
 
         return true;
@@ -195,7 +195,7 @@ class IWP_Security {
             $user_id = get_current_user_id();
         }
 
-        $cache_key = 'iwp_rate_limit_' . $action . '_' . $user_id;
+        $cache_key = 'fcip_rate_limit_' . $action . '_' . $user_id;
         $requests = get_transient($cache_key);
 
         if (false === $requests) {
@@ -227,7 +227,7 @@ class IWP_Security {
         $required_fields = array('name', 'admin_email');
         foreach ($required_fields as $field) {
             if (empty($data[$field])) {
-                $errors[] = sprintf(__('Field %s is required.', 'iwp-wp-integration'), $field);
+                $errors[] = sprintf(__('Field %s is required.', 'fluentcart-instawp-provisioning'), $field);
             }
         }
 
@@ -244,7 +244,7 @@ class IWP_Security {
 
         // Validate email
         if (!is_email($sanitized['admin_email'])) {
-            return new WP_Error('invalid_email', __('Invalid email address.', 'iwp-wp-integration'));
+            return new WP_Error('invalid_email', __('Invalid email address.', 'fluentcart-instawp-provisioning'));
         }
 
         return $sanitized;
@@ -268,7 +268,7 @@ class IWP_Security {
             'context' => $context
         );
 
-        IWP_Logger::info('Security event', 'security', $log_data);
+        FCIP_Logger::info('Security event', 'security', $log_data);
     }
 
     /**

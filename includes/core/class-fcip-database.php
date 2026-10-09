@@ -2,8 +2,8 @@
 /**
  * Database Helper Class
  *
- * @package IWP
- * @since 0.0.1
+ * @package FCIP
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -12,11 +12,11 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * IWP_Database class
+ * FCIP_Database class
  * 
  * Centralized database operations for order meta, options, and common queries
  */
-class IWP_Database {
+class FCIP_Database {
 
     /**
      * Append data to order meta array
@@ -69,7 +69,7 @@ class IWP_Database {
         static $options = null;
 
         if ($options === null) {
-            $options = get_option('iwp_options', array());
+            $options = get_option('fcip_options', array());
         }
 
         if ($key !== null) {
@@ -89,7 +89,7 @@ class IWP_Database {
     public static function update_plugin_option($key, $value) {
         $options = self::get_plugin_options();
         $options[$key] = $value;
-        return update_option('iwp_options', $options);
+        return update_option('fcip_options', $options);
     }
 
     /**
@@ -106,7 +106,7 @@ class IWP_Database {
      * @return array
      */
     public static function get_users_for_dropdown($limit = 50) {
-        $cache_key = 'iwp_users_dropdown_' . $limit;
+        $cache_key = 'fcip_users_dropdown_' . $limit;
         $cached_users = get_transient($cache_key);
 
         if ($cached_users !== false) {
@@ -147,7 +147,7 @@ class IWP_Database {
      *
      * @param string $prefix Optional prefix to filter transients
      */
-    public static function cleanup_transients($prefix = 'iwp_') {
+    public static function cleanup_transients($prefix = 'fcip_') {
         global $wpdb;
 
         $wpdb->query($wpdb->prepare(
@@ -180,25 +180,6 @@ class IWP_Database {
     }
 
     /**
-     * Get database schema version
-     *
-     * @return string
-     */
-    public static function get_schema_version() {
-        return get_option('iwp_db_version', '1.0.0');
-    }
-
-    /**
-     * Update database schema version
-     *
-     * @param string $version
-     * @return bool
-     */
-    public static function update_schema_version($version) {
-        return update_option('iwp_db_version', $version);
-    }
-
-    /**
      * Create custom table for plugin logs
      *
      * @return bool
@@ -206,7 +187,7 @@ class IWP_Database {
     public static function create_logs_table() {
         global $wpdb;
 
-        $table_name = $wpdb->prefix . 'iwp_logs';
+        $table_name = $wpdb->prefix . 'fcip_logs';
 
         $charset_collate = $wpdb->get_charset_collate();
 
@@ -243,7 +224,7 @@ class IWP_Database {
         try {
             global $wpdb;
 
-            $table_name = $wpdb->prefix . 'iwp_logs';
+            $table_name = $wpdb->prefix . 'fcip_logs';
 
             if ($user_id === null) {
                 $user_id = get_current_user_id();
@@ -254,10 +235,10 @@ class IWP_Database {
             // Same gate as the file log: a row here is persisted indefinitely, so
             // an unencodable, oversized or credential-bearing payload is dropped
             // rather than stored. The reason is logged so the drop is traceable.
-            $rejection = IWP_Logger::payload_rejection_reason($encoded);
+            $rejection = FCIP_Logger::payload_rejection_reason($encoded);
 
             if ($rejection !== null) {
-                IWP_Logger::warning('Activity log entry skipped: ' . $rejection, 'database', array(
+                FCIP_Logger::warning('Activity log entry skipped: ' . $rejection, 'database', array(
                     'action' => $action,
                 ));
 
@@ -279,7 +260,7 @@ class IWP_Database {
         } catch (\Throwable $e) {
             // Never let an audit-log write break the operation it
             // was recording.
-            IWP_Logger::error('Activity log write failed', 'database', array(
+            FCIP_Logger::error('Activity log write failed', 'database', array(
                 'action' => $action,
                 'error'  => $e->getMessage(),
             ));
@@ -297,7 +278,7 @@ class IWP_Database {
     public static function get_activity_logs($args = array()) {
         global $wpdb;
 
-        $table_name = $wpdb->prefix . 'iwp_logs';
+        $table_name = $wpdb->prefix . 'fcip_logs';
 
         $defaults = array(
             'limit' => 50,
@@ -346,15 +327,15 @@ class IWP_Database {
         $where_values[] = $args['offset'];
 
         if (!empty($where_values)) {
-            IWP_Logger::debug('database get_activity_logs() - where values', 'database', $where_values);
-            IWP_Logger::debug('database get_activity_logs() - query', 'database', array('query' => $query));
-            IWP_Logger::debug('database get_activity_logs() - values type check', 'database', array('is_array' => is_array($where_values), 'count' => is_array($where_values) ? count($where_values) : null));
+            FCIP_Logger::debug('database get_activity_logs() - where values', 'database', $where_values);
+            FCIP_Logger::debug('database get_activity_logs() - query', 'database', array('query' => $query));
+            FCIP_Logger::debug('database get_activity_logs() - values type check', 'database', array('is_array' => is_array($where_values), 'count' => is_array($where_values) ? count($where_values) : null));
             
             try {
                 $query = $wpdb->prepare($query, $where_values);
-                IWP_Logger::debug('database get_activity_logs() - SQL prepared successfully', 'database');
+                FCIP_Logger::debug('database get_activity_logs() - SQL prepared successfully', 'database');
             } catch (\Throwable $e) {
-                IWP_Logger::error('database get_activity_logs() - exception during prepare', 'database', array('error' => $e->getMessage()));
+                FCIP_Logger::error('database get_activity_logs() - exception during prepare', 'database', array('error' => $e->getMessage()));
                 throw $e;
             }
         }

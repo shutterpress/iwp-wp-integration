@@ -6,4 +6,4 @@
 4. Save the feed and complete a purchase using your payment gateway's test mode.
 5. Check **InstaWP → Sites** and the FluentCart order activity log. Site setup and login details appear on the customer's thank-you page.
 
-Create an account page containing `[iwp_fluentcart_sites]` to let signed-in customers revisit their sites. `[iwp_onboarding]` is an alias for this FluentCart portal. A guest can revisit the page with their FluentCart `order_hash` receipt credential.
+Create an account page containing `[fcip_sites]` to let signed-in customers revisit their sites. A guest can revisit the page with their FluentCart `order_hash` receipt credential.

@@ -2,21 +2,21 @@
 /** FluentCart's native product integration editor. */
 defined('ABSPATH') || exit;
 
-class IWP_FluentCart_Integration extends \FluentCart\App\Modules\Integrations\BaseIntegrationManager {
+class FCIP_FluentCart_Integration extends \FluentCart\App\Modules\Integrations\BaseIntegrationManager {
     protected $runOnBackgroundForProduct = false;
     public $scopes = array('product');
     public $disableGlobalSettings = true;
     private $processor;
 
     public function __construct($processor) {
-        parent::__construct('InstaWP', 'instawp', 20);
+        parent::__construct('InstaWP', 'fcip', 20);
         $this->processor = $processor;
-        $this->description = __('Provision an InstaWP site when this product is paid for.', 'iwp-wp-integration');
-        $this->logo = IWP_PLUGIN_URL . 'assets/images/instawp-logo.svg';
+        $this->description = __('Provision an InstaWP site when this product is paid for.', 'fluentcart-instawp-provisioning');
+        $this->logo = FCIP_PLUGIN_URL . 'assets/images/instawp-logo.svg';
     }
 
     public function isConfigured() {
-        $options = get_option('iwp_options', array());
+        $options = get_option('fcip_options', array());
         return !empty($options['api_key']) && ($options['enable_integration'] ?? 'yes') === 'yes';
     }
 
@@ -33,13 +33,13 @@ class IWP_FluentCart_Integration extends \FluentCart\App\Modules\Integrations\Ba
 
     public function getSettingsFields($settings, $args = array()) {
         $fields = array(
-            array('key' => 'name', 'label' => __('Feed title', 'iwp-wp-integration'), 'component' => 'text', 'required' => true),
-            array('key' => 'snapshot_slug', 'label' => __('InstaWP snapshot', 'iwp-wp-integration'), 'component' => 'select', 'required' => true, 'options' => IWP_Service::get_snapshots_for_dropdown()),
-            array('key' => 'plan_id', 'label' => __('InstaWP hosting plan', 'iwp-wp-integration'), 'component' => 'select', 'options' => IWP_Service::get_plans_for_dropdown()),
-            array('key' => 'expiry_type', 'label' => __('Site expiry', 'iwp-wp-integration'), 'component' => 'select', 'options' => array('permanent' => __('Permanent', 'iwp-wp-integration'), 'temporary' => __('Temporary', 'iwp-wp-integration'))),
-            array('key' => 'expiry_hours', 'label' => __('Temporary site lifetime (hours)', 'iwp-wp-integration'), 'component' => 'text'),
-            array('key' => 'defer_creation', 'component' => 'yes-no-checkbox', 'checkbox_label' => __('Let the customer choose their username and subdomain after payment', 'iwp-wp-integration')),
-            array('key' => 'manage_subscription', 'component' => 'yes-no-checkbox', 'checkbox_label' => __('Keep subscription sites permanent while active; make them temporary on failed payment, pause, cancellation or expiry', 'iwp-wp-integration')),
+            array('key' => 'name', 'label' => __('Feed title', 'fluentcart-instawp-provisioning'), 'component' => 'text', 'required' => true),
+            array('key' => 'snapshot_slug', 'label' => __('InstaWP snapshot', 'fluentcart-instawp-provisioning'), 'component' => 'select', 'required' => true, 'options' => FCIP_Service::get_snapshots_for_dropdown()),
+            array('key' => 'plan_id', 'label' => __('InstaWP hosting plan', 'fluentcart-instawp-provisioning'), 'component' => 'select', 'options' => FCIP_Service::get_plans_for_dropdown()),
+            array('key' => 'expiry_type', 'label' => __('Site expiry', 'fluentcart-instawp-provisioning'), 'component' => 'select', 'options' => array('permanent' => __('Permanent', 'fluentcart-instawp-provisioning'), 'temporary' => __('Temporary', 'fluentcart-instawp-provisioning'))),
+            array('key' => 'expiry_hours', 'label' => __('Temporary site lifetime (hours)', 'fluentcart-instawp-provisioning'), 'component' => 'text'),
+            array('key' => 'defer_creation', 'component' => 'yes-no-checkbox', 'checkbox_label' => __('Let the customer choose their username and subdomain after payment', 'fluentcart-instawp-provisioning')),
+            array('key' => 'manage_subscription', 'component' => 'yes-no-checkbox', 'checkbox_label' => __('Keep subscription sites permanent while active; make them temporary on failed payment, pause, cancellation or expiry', 'fluentcart-instawp-provisioning')),
         );
         return array('fields' => $fields, 'button_require_list' => false, 'integration_title' => 'InstaWP');
     }
@@ -55,7 +55,7 @@ class IWP_FluentCart_Integration extends \FluentCart\App\Modules\Integrations\Ba
             $data[$key] = ($data[$key] ?? '') === 'yes' ? 'yes' : 'no';
         }
         if (!$data['snapshot_slug']) {
-            return new WP_Error('snapshot_required', __('Select an InstaWP snapshot.', 'iwp-wp-integration'));
+            return new WP_Error('snapshot_required', __('Select an InstaWP snapshot.', 'fluentcart-instawp-provisioning'));
         }
         return $data;
     }
@@ -65,7 +65,7 @@ class IWP_FluentCart_Integration extends \FluentCart\App\Modules\Integrations\Ba
             return;
         }
         $meta = \FluentCart\App\Models\ProductMeta::find(absint($eventData['integration_id'] ?? 0));
-        if (!$meta || $meta->object_type !== 'product_integration' || $meta->meta_key !== 'instawp') {
+        if (!$meta || $meta->object_type !== 'product_integration' || $meta->meta_key !== 'fcip') {
             return;
         }
         $this->processor->process_feed($order, $meta->object_id, $eventData['feed'] ?? array(), $meta->id);
