@@ -42,13 +42,10 @@ class IWP_Admin_Simple {
         // AJAX handlers
         add_action('wp_ajax_iwp_refresh_templates', array($this, 'ajax_refresh_templates'));
         add_action('wp_ajax_iwp_refresh_plans', array($this, 'ajax_refresh_plans'));
-        add_action('wp_ajax_iwp_create_test_order', array($this, 'ajax_create_test_order'));
         add_action('wp_ajax_iwp_refresh_teams', array($this, 'ajax_refresh_teams'));
         add_action('wp_ajax_iwp_set_team', array($this, 'ajax_set_team'));
         
         // Domain mapping AJAX handlers (for frontend domain mapping)
-        add_action('wp_ajax_iwp_add_domain', array($this, 'ajax_add_domain'));
-        add_action('wp_ajax_nopriv_iwp_add_domain', array($this, 'ajax_add_domain'));
 
         // Send credentials AJAX handler
         add_action('wp_ajax_iwp_send_credentials', array($this, 'ajax_send_credentials'));
@@ -65,7 +62,7 @@ class IWP_Admin_Simple {
         add_menu_page(
             esc_html__('InstaWP Sites', 'iwp-wp-integration'),
             esc_html__('InstaWP', 'iwp-wp-integration'),
-            'manage_woocommerce',
+            'manage_options',
             'instawp-sites',
             array($this, 'sites_page'),
             $this->get_menu_icon(),
@@ -77,7 +74,7 @@ class IWP_Admin_Simple {
             'instawp-sites',
             esc_html__('InstaWP Sites', 'iwp-wp-integration'),
             esc_html__('Sites', 'iwp-wp-integration'),
-            'manage_woocommerce',
+            'manage_options',
             'instawp-sites',
             array($this, 'sites_page')
         );
@@ -97,7 +94,7 @@ class IWP_Admin_Simple {
             'instawp-sites',
             esc_html__('InstaWP Documentation', 'iwp-wp-integration'),
             esc_html__('Docs', 'iwp-wp-integration'),
-            'manage_woocommerce',
+            'manage_options',
             'instawp-docs',
             array($this, 'docs_page')
         );
@@ -181,7 +178,7 @@ class IWP_Admin_Simple {
                 
                 <?php
                 // Get sites from recent completed orders
-                $sites = $this->get_sites_from_orders();
+                $sites = array();
                 
                 if (empty($sites)) {
                     echo '<p>' . esc_html__('No InstaWP sites found. Create some test orders to see sites here.', 'iwp-wp-integration') . '</p>';
@@ -253,43 +250,8 @@ class IWP_Admin_Simple {
     }
     
     /**
-     * Get sites from WooCommerce orders
+     * Get sites from FluentCart orders
      */
-    private function get_sites_from_orders() {
-        if (!function_exists('wc_get_orders')) {
-            return array();
-        }
-
-        // Route through the HPOS/CPT compat wrapper so meta_query is evaluated
-        // correctly on both data stores and orders whose meta still lives in
-        // wp_postmeta (pre-HPOS-fix plugin builds) are included.
-        $orders = IWP_Woo_HPOS::get_orders(array(
-            'limit'      => 50,
-            'status'     => array('completed', 'processing'),
-            'meta_query' => array(
-                array(
-                    'key'     => '_iwp_created_sites',
-                    'compare' => 'EXISTS',
-                ),
-            ),
-        ));
-
-        $sites = array();
-        foreach ($orders as $order) {
-            // HPOS-safe read — handles wp_postmeta fallback + forward-migrate
-            // for values written by older plugin builds.
-            $order_sites = IWP_Woo_HPOS::get_order_meta($order, '_iwp_created_sites');
-            if (is_array($order_sites)) {
-                foreach ($order_sites as $site) {
-                    $site['order_id']   = $order->get_id();
-                    $site['order_date'] = $order->get_date_created()->format('Y-m-d H:i:s');
-                    $sites[]            = $site;
-                }
-            }
-        }
-
-        return $sites;
-    }
     
     /**
      * Render individual site card
@@ -396,7 +358,7 @@ class IWP_Admin_Simple {
         // General Settings Section
         add_settings_section(
             'iwp_general',
-            esc_html__('WooCommerce Integration Settings', 'iwp-wp-integration'),
+            esc_html__('FluentCart Integration Settings', 'iwp-wp-integration'),
             array($this, 'general_section_callback'),
             'iwp_settings'
         );
@@ -407,29 +369,18 @@ class IWP_Admin_Simple {
             array($this, 'checkbox_callback'),
             'iwp_settings',
             'iwp_general',
-            array('field' => 'enable_integration', 'label' => 'Enable the InstaWP WooCommerce integration')
+            array('field' => 'enable_integration', 'label' => 'Enable the InstaWP FluentCart integration')
         );
 
         add_settings_field(
-            'auto_create_sites',
+            'auto_create_sites_on_purchase',
             esc_html__('Auto-Create Sites', 'iwp-wp-integration'),
             array($this, 'checkbox_callback'),
             'iwp_settings',
             'iwp_general',
-            array('field' => 'auto_create_sites', 'label' => 'Automatically create sites when orders are completed')
+            array('field' => 'auto_create_sites_on_purchase', 'label' => 'Automatically create sites when FluentCart orders are paid')
         );
 
-        add_settings_field(
-            'use_site_id_parameter',
-            esc_html__('Auto-Convert Demo or Trial Sites', 'iwp-wp-integration'),
-            array($this, 'checkbox_callback'),
-            'iwp_settings',
-            'iwp_general',
-            array(
-                'field' => 'use_site_id_parameter',
-                'label' => 'Automatically recognize sites for plan change using site_id parameter'
-            )
-        );
 
         add_settings_field(
             'delay_customer_credentials',
@@ -443,17 +394,6 @@ class IWP_Admin_Simple {
             )
         );
 
-        add_settings_field(
-            'show_site_credentials_on_dashboard',
-            esc_html__('Show Site Credentials on Dashboard', 'iwp-wp-integration'),
-            array($this, 'checkbox_callback'),
-            'iwp_settings',
-            'iwp_general',
-            array(
-                'field' => 'show_site_credentials_on_dashboard',
-                'label' => 'Show ordered site username and password on the WooCommerce My Account dashboard page.'
-            )
-        );
 
         add_settings_field(
             'enable_cache_purge',
@@ -484,15 +424,15 @@ class IWP_Admin_Simple {
         echo '<p>' . esc_html__('Configure general integration settings.', 'iwp-wp-integration') . '</p>';
         
         // Show subscription integration status
-        if (class_exists('WC_Subscriptions') || function_exists('wcs_get_subscription')) {
+        if (class_exists('FluentCart\App\Models\Subscription')) {
             echo '<div class="iwp-integration-status" style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin: 10px 0;">';
-            echo '<strong>✅ ' . esc_html__('WooCommerce Subscriptions Integration Active', 'iwp-wp-integration') . '</strong><br>';
+            echo '<strong>✅ ' . esc_html__('FluentCart Subscriptions Integration Active', 'iwp-wp-integration') . '</strong><br>';
             echo esc_html__('Sites will automatically be marked as temporary when subscriptions are unpaid and permanent when paid.', 'iwp-wp-integration');
             echo '</div>';
         } else {
             echo '<div class="iwp-integration-status" style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; margin: 10px 0;">';
-            echo '<strong>ℹ️ ' . esc_html__('WooCommerce Subscriptions Not Detected', 'iwp-wp-integration') . '</strong><br>';
-            echo esc_html__('Install WooCommerce Subscriptions plugin to enable automatic site status management based on payment status.', 'iwp-wp-integration');
+            echo '<strong>ℹ️ ' . esc_html__('FluentCart Subscriptions Not Detected', 'iwp-wp-integration') . '</strong><br>';
+            echo esc_html__('Install FluentCart to enable automatic site status management based on payment status.', 'iwp-wp-integration');
             echo '</div>';
         }
     }
@@ -549,7 +489,7 @@ class IWP_Admin_Simple {
         // If no form identifier, try to detect based on fields
         if (!$is_general_form && !$is_debug_form) {
             // Check for specific fields to identify the form
-            if (isset($input['api_key']) || isset($input['enable_integration']) || isset($input['auto_create_sites'])) {
+            if (isset($input['api_key']) || isset($input['enable_integration']) || isset($input['auto_create_sites_on_purchase'])) {
                 $is_general_form = true;
             } elseif (isset($input['debug_mode']) || isset($input['log_level'])) {
                 $is_debug_form = true;
@@ -567,16 +507,14 @@ class IWP_Admin_Simple {
             $sanitized['enable_integration'] = isset($input['enable_integration']) && $input['enable_integration'] === 'yes' ? 'yes' : 'no';
             
             // Auto-create sites - checkbox, so absence means 'no'
-            $sanitized['auto_create_sites'] = isset($input['auto_create_sites']) && $input['auto_create_sites'] === 'yes' ? 'yes' : 'no';
+            $sanitized['auto_create_sites_on_purchase'] = isset($input['auto_create_sites_on_purchase']) && $input['auto_create_sites_on_purchase'] === 'yes' ? 'yes' : 'no';
             
             // Use site_id parameter - checkbox, so absence means 'no'
-            $sanitized['use_site_id_parameter'] = isset($input['use_site_id_parameter']) && $input['use_site_id_parameter'] === 'yes' ? 'yes' : 'no';
 
             // Delay customer credentials - checkbox, so absence means 'no'
             $sanitized['delay_customer_credentials'] = isset($input['delay_customer_credentials']) && $input['delay_customer_credentials'] === 'yes' ? 'yes' : 'no';
 
             // Show site credentials on customer dashboard - checkbox, so absence means 'no'
-            $sanitized['show_site_credentials_on_dashboard'] = isset($input['show_site_credentials_on_dashboard']) && $input['show_site_credentials_on_dashboard'] === 'yes' ? 'yes' : 'no';
 
             // Allow customers to clear their own site cache - checkbox, so absence means 'no'
             $sanitized['enable_cache_purge'] = isset($input['enable_cache_purge']) && $input['enable_cache_purge'] === 'yes' ? 'yes' : 'no';
@@ -757,110 +695,6 @@ class IWP_Admin_Simple {
     /**
      * AJAX: Create test order
      */
-    public function ajax_create_test_order() {
-        check_ajax_referer('iwp_admin_nonce', 'nonce');
-        
-        if (!current_user_can('manage_woocommerce')) {
-            wp_send_json_error('Insufficient permissions');
-        }
-
-        $product_id = intval($_POST['product_id'] ?? 0);
-        
-        if (!$product_id) {
-            wp_send_json_error('Please select a product');
-        }
-
-        // Check if WooCommerce is active
-        if (!class_exists('WC_Order')) {
-            wp_send_json_error('WooCommerce is required for test orders');
-        }
-
-        try {
-            // Get the current logged-in user
-            $current_user = wp_get_current_user();
-            
-            // Create a new order
-            $order = wc_create_order();
-            
-            if (is_wp_error($order)) {
-                wp_send_json_error('Failed to create order: ' . $order->get_error_message());
-            }
-
-            // Add the product to the order
-            $product = wc_get_product($product_id);
-            if (!$product) {
-                wp_send_json_error('Invalid product');
-            }
-
-            $order->add_product($product, 1);
-
-            // Set the current user as the customer
-            $order->set_customer_id($current_user->ID);
-            
-            // Use the current user's information for billing
-            $order->set_billing_first_name($current_user->first_name ?: $current_user->display_name);
-            $order->set_billing_last_name($current_user->last_name ?: 'User');
-            $order->set_billing_email($current_user->user_email);
-            
-            // Set default address if user doesn't have billing address stored
-            $billing_address_1 = get_user_meta($current_user->ID, 'billing_address_1', true);
-            $billing_city = get_user_meta($current_user->ID, 'billing_city', true);
-            $billing_country = get_user_meta($current_user->ID, 'billing_country', true);
-            $billing_postcode = get_user_meta($current_user->ID, 'billing_postcode', true);
-            
-            $order->set_billing_address_1($billing_address_1 ?: '123 Test Street');
-            $order->set_billing_city($billing_city ?: 'Test City');
-            $order->set_billing_country($billing_country ?: 'US');
-            $order->set_billing_postcode($billing_postcode ?: '12345');
-
-            // Calculate totals
-            $order->calculate_totals();
-
-            // Add order note
-            $order->add_order_note(sprintf(
-                'Test order created from InstaWP Integration admin panel by %s',
-                $current_user->display_name
-            ));
-
-            // Get snapshot info for the product
-            $snapshot_slug = get_post_meta($product_id, '_iwp_selected_snapshot', true);
-            $plan_id = get_post_meta($product_id, '_iwp_selected_plan', true);
-
-            // Add order meta for InstaWP
-            if ($snapshot_slug) {
-                $order->update_meta_data('_iwp_snapshot_slug', $snapshot_slug);
-            }
-            if ($plan_id) {
-                $order->update_meta_data('_iwp_plan_id', $plan_id);
-            }
-
-            // Save the order
-            $order->save();
-
-            // Mark as completed to trigger site creation
-            $order->update_status('completed', 'Test order auto-completed for site creation');
-
-            // Get the order edit URL
-            $order_edit_url = admin_url('post.php?post=' . $order->get_id() . '&action=edit');
-            
-            // Get My Account orders URL for the customer
-            $my_account_url = wc_get_account_endpoint_url('orders');
-
-            wp_send_json_success(array(
-                'message' => sprintf('Test order created successfully for %s!', $current_user->display_name),
-                'order_id' => $order->get_id(),
-                'order_edit_url' => $order_edit_url,
-                'my_account_url' => $my_account_url,
-                'customer_name' => $current_user->display_name,
-                'customer_email' => $current_user->user_email,
-                'snapshot_slug' => $snapshot_slug ?: 'No snapshot selected',
-                'plan_id' => $plan_id ?: 'No plan selected'
-            ));
-
-        } catch (Exception $e) {
-            wp_send_json_error('Error creating test order: ' . $e->getMessage());
-        }
-    }
 
     /**
      * AJAX: Refresh teams
@@ -914,111 +748,6 @@ class IWP_Admin_Simple {
     /**
      * AJAX: Add domain to site
      */
-    public function ajax_add_domain() {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'iwp_add_domain_nonce')) {
-            wp_send_json_error(array(
-                'message' => __('Security check failed', 'iwp-wp-integration')
-            ));
-        }
-
-        // Check if user is logged in (can be guest if they have valid session)
-        $order_id = intval($_POST['order_id'] ?? 0);
-        $site_id = intval($_POST['site_id'] ?? 0);
-        $domain_name = sanitize_text_field($_POST['domain_name'] ?? '');
-        $domain_type = sanitize_text_field($_POST['domain_type'] ?? 'primary');
-
-        if (!$order_id || !$site_id || !$domain_name) {
-            wp_send_json_error(array(
-                'message' => __('Missing required information', 'iwp-wp-integration')
-            ));
-        }
-
-        // Validate domain format
-        if (!filter_var('http://' . $domain_name, FILTER_VALIDATE_URL)) {
-            wp_send_json_error(array(
-                'message' => __('Invalid domain format', 'iwp-wp-integration')
-            ));
-        }
-
-        // Check if user can view this order
-        $order = wc_get_order($order_id);
-        if (!$order) {
-            wp_send_json_error(array(
-                'message' => __('Order not found', 'iwp-wp-integration')
-            ));
-        }
-
-        // For logged-in users, check if they own the order
-        if (is_user_logged_in()) {
-            $current_user_id = get_current_user_id();
-            $order_customer_id = $order->get_customer_id();
-            
-            if ($current_user_id != $order_customer_id) {
-                wp_send_json_error(array(
-                    'message' => __('Access denied', 'iwp-wp-integration')
-                ));
-            }
-        }
-
-        // Get API client and add domain
-        require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-api-client.php';
-        $api_client = new IWP_API_Client();
-        $options = get_option('iwp_options', array());
-        $api_key = $options['api_key'] ?? '';
-        
-        if (empty($api_key)) {
-            wp_send_json_error(array(
-                'message' => __('API key not configured', 'iwp-wp-integration')
-            ));
-        }
-
-        $api_client->set_api_key($api_key);
-        $result = $api_client->add_domain_to_site($site_id, $domain_name, $domain_type);
-
-        if (is_wp_error($result)) {
-            wp_send_json_error(array(
-                'message' => $result->get_error_message()
-            ));
-        }
-
-        // Store domain mapping in order meta for future reference
-        $domain_info = array(
-            'site_id' => $site_id,
-            'domain_name' => $domain_name,
-            'domain_type' => $domain_type,
-            'mapped_at' => current_time('mysql'),
-            'api_response' => $result
-        );
-
-        // Use the database helper to append domain info
-        require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-database.php';
-        IWP_Database::append_order_meta($order_id, '_iwp_mapped_domains', $domain_info);
-
-        // Update site URL in database with mapped domain (for primary domains)
-        if ($domain_type === 'primary') {
-            $this->update_site_url_with_mapped_domain($order_id, $site_id, $domain_name);
-        }
-
-        // Add order note
-        $order->add_order_note(
-            sprintf(
-                __('Custom domain "%s" mapped to InstaWP site (ID: %s) as %s', 'iwp-wp-integration'),
-                $domain_name,
-                $site_id,
-                $domain_type
-            ),
-            1 // Customer visible
-        );
-
-        wp_send_json_success(array(
-            'message' => sprintf(
-                __('Domain "%s" successfully mapped to your site!', 'iwp-wp-integration'),
-                $domain_name
-            ),
-            'domain_info' => $domain_info
-        ));
-    }
     
     /**
      * Update site URL with mapped domain in all relevant database locations
@@ -1027,37 +756,6 @@ class IWP_Admin_Simple {
      * @param int $site_id
      * @param string $domain_name
      */
-    private function update_site_url_with_mapped_domain($order_id, $site_id, $domain_name) {
-        $order = wc_get_order($order_id);
-        if (!$order) {
-            return;
-        }
-
-        // Update created sites meta
-        // Read via the helper so pre-HPOS-fix orders whose _iwp_created_sites
-        // value still lives in wp_postmeta are picked up (and migrated
-        // forward). Write stays on the in-scope $order — one meta-only save,
-        // no order-lifecycle hooks.
-        $created_sites = IWP_Woo_HPOS::get_order_meta($order, '_iwp_created_sites');
-        if (is_array($created_sites)) {
-            foreach ($created_sites as $index => $site) {
-                if (isset($site['site_id']) && intval($site['site_id']) === $site_id) {
-                    $created_sites[$index]['original_wp_url'] = $site['wp_url'] ?? '';
-                    $created_sites[$index]['wp_url'] = 'https://' . $domain_name;
-                    break;
-                }
-            }
-            $order->update_meta_data('_iwp_created_sites', $created_sites);
-            $order->save_meta_data();
-        }
-
-        // Update sites database if using IWP_Site_Manager
-        if (class_exists('IWP_Site_Manager')) {
-            require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-site-manager.php';
-            $site_manager = new IWP_Site_Manager();
-            $site_manager->update_site_url($site_id, 'https://' . $domain_name);
-        }
-    }
 
     /**
      * Handle sites page actions (delete, etc.)
@@ -1077,7 +775,7 @@ class IWP_Admin_Simple {
             }
 
             // Check permissions
-            if (!current_user_can('manage_woocommerce')) {
+            if (!current_user_can('manage_options')) {
                 wp_die(__('You do not have sufficient permissions to perform this action.', 'iwp-wp-integration'));
             }
 
@@ -1125,7 +823,7 @@ class IWP_Admin_Simple {
     public function ajax_send_credentials() {
         check_ajax_referer('iwp_admin_nonce', 'nonce');
 
-        if (!current_user_can('manage_woocommerce')) {
+        if (!current_user_can('manage_options')) {
             wp_send_json_error('Insufficient permissions');
         }
 
@@ -1160,16 +858,10 @@ class IWP_Admin_Simple {
 
         // Add order note if order exists
         if (!empty($site->order_id)) {
-            $order = wc_get_order($site->order_id);
+            $order = class_exists('FluentCart\App\Models\Order') ? \FluentCart\App\Models\Order::find($site->order_id) : null;
             if ($order) {
-                $order->add_order_note(
-                    sprintf(
-                        __('Site credentials released and emailed to customer for site %s by %s', 'iwp-wp-integration'),
-                        $site->site_url ?: $site_id,
-                        wp_get_current_user()->display_name
-                    ),
-                    0 // Not customer-visible note
-                );
+                $order->addLog('InstaWP credentials released', $site->site_url ?: $site_id);
+
             }
         }
 
@@ -1199,9 +891,9 @@ class IWP_Admin_Simple {
 
         // Try order billing email first
         if (!empty($site->order_id)) {
-            $order = wc_get_order($site->order_id);
+            $order = class_exists('FluentCart\App\Models\Order') ? \FluentCart\App\Models\Order::find($site->order_id) : null;
             if ($order) {
-                $to = $order->get_billing_email();
+                $to = ($order->customer->email ?? '');
             }
         }
 
@@ -1266,6 +958,6 @@ class IWP_Admin_Simple {
         $message .= '</div>';
         $message .= '</div>';
 
-        return IWP_Utilities::send_email($to, $subject, $message);
+        return wp_mail($to, $subject, $message, array('Content-Type: text/html; charset=UTF-8'));
     }
 }

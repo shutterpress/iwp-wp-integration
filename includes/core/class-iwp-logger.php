@@ -165,7 +165,7 @@ class IWP_Logger {
         $timestamp = current_time('Y-m-d H:i:s');
         $level_upper = strtoupper($level);
 
-        $formatted = "[{$timestamp}] IWP WooCommerce V2 [{$level_upper}]";
+        $formatted = "[{$timestamp}] IWP FluentCart V2 [{$level_upper}]";
 
         if (!empty($context)) {
             $formatted .= " [{$context}]";
@@ -223,7 +223,7 @@ class IWP_Logger {
             // A logging failure must never break the request that triggered
             // it. This is the one place that cannot report through the logger
             // itself, so it writes directly.
-            error_log('IWP WooCommerce V2 [ERROR] [logger]: logging failed - ' . $e->getMessage());
+            error_log('IWP FluentCart V2 [ERROR] [logger]: logging failed - ' . $e->getMessage());
         }
     }
 
@@ -424,7 +424,7 @@ class IWP_Logger {
             
             $lines_array = explode("\n", $content);
             $iwp_logs = array_filter($lines_array, function($line) {
-                return strpos($line, 'IWP WooCommerce V2') !== false;
+                return strpos($line, 'IWP FluentCart V2') !== false;
             });
             
             $logs = array_slice(array_reverse($iwp_logs), 0, $lines);
@@ -491,7 +491,7 @@ class IWP_Logger {
             // Also log to database for better tracking
             IWP_Database::log_activity('site_creation', $event, $site_data, $order_id);
         } catch (\Throwable $e) {
-            error_log('IWP WooCommerce V2 [ERROR] [logger]: site_creation logging failed - ' . $e->getMessage());
+            error_log('IWP FluentCart V2 [ERROR] [logger]: site_creation logging failed - ' . $e->getMessage());
         }
     }
 
@@ -522,7 +522,7 @@ class IWP_Logger {
             // Log to database
             IWP_Database::log_activity('order_processing', $event, $order_data, $order_id);
         } catch (\Throwable $e) {
-            error_log('IWP WooCommerce V2 [ERROR] [logger]: order_processing logging failed - ' . $e->getMessage());
+            error_log('IWP FluentCart V2 [ERROR] [logger]: order_processing logging failed - ' . $e->getMessage());
         }
     }
 
@@ -556,7 +556,8 @@ class IWP_Logger {
             // Log to database
             IWP_Database::log_activity('admin_action', $action, $context_data);
         } catch (\Throwable $e) {
-            error_log('IWP WooCommerce V2 [ERROR] [logger]: admin_action logging failed - ' . $e->getMessage());
+            error_log('IWP FluentCart V2 [ERROR] [logger]: admin_action logging failed - ' . $e->getMessage());
         }
     }
 }
+

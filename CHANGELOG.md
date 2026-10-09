@@ -1,3 +1,11 @@
+## 0.0.15 — FluentCart fork
+
+- Replace the original cart integration with native FluentCart product feeds and paid-order provisioning.
+- Add variant snapshot/plan mapping, expiry, deferred setup, customer portal and subscription reservation/plan events.
+- Remove the retired cart classes, metadata compatibility layer, checkout scripts and order test tools.
+- Use administrator capabilities and FluentCart order links; update the fork release source and documentation.
+- Add PHP/JavaScript CI and provisioning, ownership, deduplication and lifecycle checks.
+
 # Changelog
 
 All notable changes to the InstaWP Integration plugin will be documented in this file.
@@ -528,3 +536,4 @@ For questions, issues, or contributions:
 ---
 
 *This changelog is maintained to help users understand what has changed between versions. For detailed technical documentation, see `CLAUDE.md`.*
+

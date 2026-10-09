@@ -20,7 +20,7 @@ class IWP_GitHub_Updater {
      *
      * @var string
      */
-    private $repo = 'InstaWP/iwp-wp-integration';
+    private $repo = 'shutterpress/iwp-wp-integration';
 
     /**
      * Plugin slug (directory/file)
@@ -80,7 +80,7 @@ class IWP_GitHub_Updater {
         }
 
         // Check transient cache first (15 min)
-        $cached = get_transient('iwp_github_release');
+        $cached = get_transient('iwp_github_release_shutterpress');
         if ($cached !== false) {
             $this->github_response = $cached;
             return $this->github_response;
@@ -108,7 +108,7 @@ class IWP_GitHub_Updater {
         }
 
         $this->github_response = $body;
-        set_transient('iwp_github_release', $body, 15 * MINUTE_IN_SECONDS);
+        set_transient('iwp_github_release_shutterpress', $body, 15 * MINUTE_IN_SECONDS);
 
         return $this->github_response;
     }
@@ -215,7 +215,7 @@ class IWP_GitHub_Updater {
 
         // Use release body as changelog (markdown)
         $info->sections = array(
-            'description' => 'InstaWP Integration plugin for WordPress and WooCommerce.',
+            'description' => 'InstaWP Integration plugin for WordPress and FluentCart.',
             'changelog'   => nl2br(esc_html($release->body)),
         );
 
@@ -242,7 +242,7 @@ class IWP_GitHub_Updater {
         $result['destination'] = $install_dir;
 
         // Clear update transient so WP re-checks
-        delete_transient('iwp_github_release');
+        delete_transient('iwp_github_release_shutterpress');
 
         return $result;
     }
@@ -300,7 +300,7 @@ class IWP_GitHub_Updater {
             check_admin_referer('iwp_check_update');
 
             // Bust the 15-minute GitHub cache so the check hits the API again.
-            delete_transient('iwp_github_release');
+            delete_transient('iwp_github_release_shutterpress');
 
             // Bust WP's own cache so wp_update_plugins() doesn't short-circuit on its timeout.
             delete_site_transient('update_plugins');
@@ -342,3 +342,4 @@ class IWP_GitHub_Updater {
         );
     }
 }
+

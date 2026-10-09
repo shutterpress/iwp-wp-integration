@@ -2,7 +2,7 @@
 /**
  * Site Manager Class
  *
- * Handles site creation, progress tracking, and storage in WooCommerce orders
+ * Handles site creation, progress tracking, and storage in FluentCart orders
  *
  * @package IWP
  */
@@ -53,10 +53,10 @@ class IWP_Site_Manager {
      * @param string $plan_id Optional plan ID
      * @return array|WP_Error
      */
-    public function create_site_with_tracking($snapshot_slug, $site_data, $order_id, $product_id, $plan_id = '') {
+    public function create_site_with_tracking($snapshot_slug, $site_data, $order_id, $product_id, $plan_id = '', $context = array()) {
         // Get order and user information for database tracking
-        $order = wc_get_order($order_id);
-        $user_id = $order ? $order->get_customer_id() : 0;
+        $source = $context['source'] ?? 'fluentcart';
+        $user_id = absint($context['user_id'] ?? 0);
 
         // Create initial database record with "creating" status BEFORE API call
         $initial_site_data = array(
@@ -67,15 +67,18 @@ class IWP_Site_Manager {
             'product_id' => $product_id,
             'order_id' => $order_id,
             'user_id' => $user_id,
-            'source' => 'woocommerce',
-            'source_data' => array(
+            'source' => $source,
+            'source_data' => array_merge($context['source_data'] ?? array(), array(
                 'snapshot_slug' => $snapshot_slug,
                 'plan_id' => $plan_id,
                 'site_data' => $site_data
-            )
+            ))
         );
 
         $db_site_id = IWP_Sites_Model::create($initial_site_data);
+        if (!$db_site_id && $source === 'fluentcart') {
+            return new WP_Error('tracking_failed', __('Unable to save site tracking. No site was requested.', 'iwp-wp-integration'));
+        }
         IWP_Logger::info('Created initial site record in database', 'site-manager', array(
             'db_id' => $db_site_id,
             'order_id' => $order_id,
@@ -147,85 +150,15 @@ class IWP_Site_Manager {
             'updated_at' => current_time('mysql')
         );
 
-        // Store site information in order meta
-        $this->store_site_in_order($order_id, $site_info);
-
-        // Determine if we need to track task progress based on is_pool
-        $is_pool_exists = array_key_exists('is_pool', $site_data_response);
-        $is_pool_value = $is_pool_exists ? $site_data_response['is_pool'] : null;
-        
-        // Track task if:
-        // 1. is_pool is present and false, OR
-        // 2. is_pool is not present at all (process ongoing)
-        // AND we have a task_id
-        if (!empty($site_data_response['task_id'])) {
-            if ($is_pool_exists && $is_pool_value === true) {
-                // is_pool is true - site is ready, no tracking needed
-                IWP_Logger::info('Skipping task tracking - is_pool is true, site is ready immediately', 'site-manager');
-            } else if ($is_pool_exists && $is_pool_value === false) {
-                // is_pool is false - need to track task
-                IWP_Logger::info('Adding site to pending tracking - is_pool is false', 'site-manager', array('task_id' => $site_data_response['task_id']));
-                $this->add_pending_site($order_id, $product_id, $site_data_response['task_id'], $site_info);
-            } else if (!$is_pool_exists) {
-                // is_pool not present - process ongoing, need to track task
-                IWP_Logger::info('Adding site to pending tracking - is_pool not present, process ongoing', 'site-manager', array('task_id' => $site_data_response['task_id']));
-                $this->add_pending_site($order_id, $product_id, $site_data_response['task_id'], $site_info);
-            }
-        } else {
-            IWP_Logger::debug('No task_id present - cannot track progress', 'site-manager');
-        }
-
         return $site_info;
     }
 
     /**
-     * Store site information in WooCommerce order
+     * Store site information in FluentCart order
      *
      * @param int $order_id
      * @param array $site_info
      */
-    private function store_site_in_order($order_id, $site_info) {
-        // Use the IWP_Woo_HPOS wrapper for consistency with the rest of the
-        // plugin's order-loading sites. It's a thin pass-through today but
-        // gives us one place to change order hydration behaviour later.
-        $order = IWP_Woo_HPOS::get_order($order_id);
-        if (!$order) {
-            return;
-        }
-
-        // Read via the helper so pre-HPOS-fix values in wp_postmeta are picked
-        // up and migrated forward into the active data store on first read.
-        $existing_sites = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_created_sites');
-        if (!is_array($existing_sites)) {
-            $existing_sites = array();
-        }
-
-        // Add new site to the list
-        $existing_sites[] = $site_info;
-
-        // Write directly on the $order instance (meta-only save, no
-        // order-lifecycle hooks) — the order note below reuses the same object.
-        $order->update_meta_data('_iwp_created_sites', $existing_sites);
-        $order->save_meta_data();
-
-        // Add order note
-        if ($order) {
-            if ($site_info['status'] === 'completed') {
-                $note = sprintf(
-                    __('Site created successfully: %s (Username: %s)', 'iwp-woo-v2'),
-                    $site_info['wp_url'],
-                    $site_info['wp_username']
-                );
-            } else {
-                $note = sprintf(
-                    __('Site creation started. Status: %s (Task ID: %s)', 'iwp-woo-v2'),
-                    $site_info['status'],
-                    $site_info['task_id']
-                );
-            }
-            $order->add_order_note($note, 1); // 1 = customer visible
-        }
-    }
 
     /**
      * Add site to pending tracking list
@@ -235,38 +168,14 @@ class IWP_Site_Manager {
      * @param string $task_id
      * @param array $site_info
      */
-    private function add_pending_site($order_id, $product_id, $task_id, $site_info) {
-        $pending_sites = get_option('iwp_pending_sites', array());
-        
-        $pending_sites[$task_id] = array(
-            'order_id' => $order_id,
-            'product_id' => $product_id,
-            'site_info' => $site_info,
-            'created_at' => current_time('mysql')
-        );
-
-        update_option('iwp_pending_sites', $pending_sites);
-    }
 
     /**
      * Check status of pending sites
      */
     public function check_pending_sites() {
-        // Check database sites first (new method)
-        $pending_db_sites = IWP_Sites_Model::get_pending_sites();
-        
-        foreach ($pending_db_sites as $db_site) {
-            if (!empty($db_site->task_id)) {
-                $this->check_database_site_status($db_site);
-            }
-        }
-
-        // Also check legacy pending sites from options (backward compatibility)
-        $pending_sites = get_option('iwp_pending_sites', array());
-        
-        if (!empty($pending_sites)) {
-            foreach ($pending_sites as $task_id => $site_data) {
-                $this->check_single_site_status($task_id, $site_data);
+        foreach (IWP_Sites_Model::get_pending_sites() as $site) {
+            if ($site->source === 'fluentcart' && !empty($site->task_id)) {
+                $this->check_database_site_status($site);
             }
         }
     }
@@ -360,16 +269,8 @@ class IWP_Site_Manager {
             IWP_Logger::debug('site-manager database handler - IWP_Sites_Model::update completed', 'site-manager');
 
             // Add success note to order if available (use updated credentials)
-            if (!empty($db_site->order_id)) {
-                $order = wc_get_order($db_site->order_id);
-                if ($order) {
-                    $note = sprintf(
-                        __('Site creation completed: %s (Username: %s)', 'iwp-woo-v2'),
-                        $update_data['site_url'] ?? $db_site->site_url ?: 'Site URL pending',
-                        $update_data['wp_username'] ?? $db_site->wp_username ?: 'Username pending'
-                    );
-                    $order->add_order_note($note, 1);
-                }
+            if ($db_site->source === 'fluentcart') {
+                do_action('iwp_fluentcart_site_status_updated', $db_site, $update_data);
             }
 
             IWP_Logger::info('Database site marked as completed', 'site-manager', array(
@@ -386,15 +287,8 @@ class IWP_Site_Manager {
             ));
 
             // Add failure note to order if available
-            if (!empty($db_site->order_id)) {
-                $order = wc_get_order($db_site->order_id);
-                if ($order) {
-                    $note = sprintf(
-                        __('Site creation failed for task: %s', 'iwp-woo-v2'),
-                        $db_site->task_id
-                    );
-                    $order->add_order_note($note, 1);
-                }
+            if ($db_site->source === 'fluentcart') {
+                do_action('iwp_fluentcart_site_status_updated', $db_site, array('status' => 'failed'));
             }
 
             IWP_Logger::info('Database site marked as failed', 'site-manager', array(
@@ -410,171 +304,6 @@ class IWP_Site_Manager {
      * @param string $task_id
      * @param array $site_data
      */
-    private function check_single_site_status($task_id, $site_data) {
-        IWP_Logger::info('Checking single site status', 'site-manager', array('task_id' => $task_id, 'order_id' => $site_data['order_id']));
-        
-        $response = $this->api_client->get_task_status($task_id);
-        
-        if (is_wp_error($response)) {
-            IWP_Logger::error('Failed to check task status', 'site-manager', array('task_id' => $task_id, 'error' => $response->get_error_message()));
-            return;
-        }
-
-        $task_info = $response['data'] ?? array();
-        $raw_status = $task_info['status'] ?? 1;
-        $status = $this->map_status_code($raw_status);
-
-        IWP_Logger::info('Task status check result', 'site-manager', array(
-            'task_id' => $task_id,
-            'raw_status' => $raw_status,
-            'mapped_status' => $status,
-            'task_info' => $task_info
-        ));
-
-        // If task is still in progress, continue waiting
-        if ($status === 'progress') {
-            IWP_Logger::debug('Task still in progress, continuing to wait', 'site-manager', array('task_id' => $task_id));
-            return;
-        }
-
-        // Task is completed or failed
-        $order_id = $site_data['order_id'];
-        $site_info = $site_data['site_info'];
-
-        // Skip if the local row was deleted (status=STATUS_TRASHED). The
-        // remote task has long since finished — we must not resurrect it.
-        // Drop the legacy entry so we stop polling it every minute too.
-        if (!empty($site_info['site_id'])) {
-            $db_row = IWP_Sites_Model::get_by_site_id($site_info['site_id']);
-            if ($db_row && $db_row->status === IWP_Sites_Model::STATUS_TRASHED) {
-                $pending = get_option('iwp_pending_sites', array());
-                if (isset($pending[$task_id])) {
-                    unset($pending[$task_id]);
-                    update_option('iwp_pending_sites', $pending);
-                }
-                IWP_Logger::info('Skipped polled update — row is trashed', 'site-manager', array(
-                    'site_id' => $site_info['site_id'],
-                    'task_id' => $task_id,
-                ));
-                return;
-            }
-        }
-
-        if ($status === 'completed' || $status === 'success') {
-            // Update site status to completed
-            $site_info['status'] = 'completed';
-            $site_info['updated_at'] = current_time('mysql');
-            
-            // Fetch complete site details now that the site is ready
-            if (!empty($site_info['site_id'])) {
-                $site_details_response = $this->api_client->get_site_details($site_info['site_id']);
-                $db_update_data = array(
-                    'status' => 'completed',
-                    'api_response' => $task_info
-                );
-                
-                if (!is_wp_error($site_details_response) && isset($site_details_response['data'])) {
-                    // Shared parser for correct key paths (creds under site_meta,
-                    // site hash from 'hash'). Returns only present DB-column keys.
-                    $flat = IWP_API_Client::flatten_site_details($site_details_response);
-                    $db_update_data = array_merge($db_update_data, $flat);
-                    $site_info = array_merge($site_info, $flat);
-                    // $site_info historically uses 'wp_url' for the URL key.
-                    $site_info['wp_url'] = $flat['site_url'] ?? $site_info['wp_url'] ?? '';
-
-                    IWP_Logger::info('Updated legacy site with fresh credentials', 'site-manager', array(
-                        'site_id' => $site_info['site_id'],
-                        'has_username' => !empty($site_info['wp_username']),
-                        'has_password' => !empty($site_info['wp_password'])
-                    ));
-                } elseif (is_wp_error($site_details_response)) {
-                    $err = $site_details_response->get_error_message();
-                    // Match the Eloquent-style "not found" signature only.
-                    // Substring '404' was deliberately removed — too broad
-                    // (any future error containing those digits would falsely
-                    // trigger the deletion-detection path).
-                    if (strpos($err, 'No query results') !== false) {
-                        // Remote site no longer exists. Don't resurrect the local row
-                        // as "completed". Drop the stale pending entry and bail.
-                        $pending = get_option('iwp_pending_sites', array());
-                        if (isset($pending[$task_id])) {
-                            unset($pending[$task_id]);
-                            update_option('iwp_pending_sites', $pending);
-                        }
-                        IWP_Logger::info('Polled task references a deleted remote site; skipping local update', 'site-manager', array(
-                            'site_id' => $site_info['site_id'],
-                            'task_id' => $task_id,
-                            'error' => $err,
-                        ));
-                        return;
-                    }
-                    IWP_Logger::warning('Could not fetch site details for legacy site credentials', 'site-manager', array(
-                        'site_id' => $site_info['site_id'],
-                        'error' => $err,
-                    ));
-                } else {
-                    IWP_Logger::warning('Could not fetch site details for legacy site credentials', 'site-manager', array(
-                        'site_id' => $site_info['site_id'],
-                        'error' => 'No data returned',
-                    ));
-                }
-
-                // Update database record
-                IWP_Sites_Model::update($site_info['site_id'], $db_update_data);
-                IWP_Logger::info('Updated database site record to completed', 'site-manager', array(
-                    'site_id' => $site_info['site_id'],
-                    'task_id' => $task_id
-                ));
-            }
-            
-            // Get fresh site data if needed
-            $this->update_completed_site($order_id, $site_info);
-            
-            // Add success note to order (now with updated credentials)
-            $order = wc_get_order($order_id);
-            if ($order) {
-                $note = sprintf(
-                    __('Site creation completed: %s (Username: %s)', 'iwp-woo-v2'),
-                    $site_info['wp_url'] ?: 'Site URL pending',
-                    $site_info['wp_username'] ?: 'Username pending'
-                );
-                $order->add_order_note($note, 1); // 1 = customer visible
-            }
-        } else {
-            // Task failed
-            $site_info['status'] = 'failed';
-            $site_info['updated_at'] = current_time('mysql');
-            
-            // Update database record
-            if (!empty($site_info['site_id'])) {
-                IWP_Sites_Model::update($site_info['site_id'], array(
-                    'status' => 'failed',
-                    'api_response' => $task_info
-                ));
-                IWP_Logger::info('Updated database site record to failed', 'site-manager', array(
-                    'site_id' => $site_info['site_id'],
-                    'task_id' => $task_id
-                ));
-            }
-            
-            $this->update_failed_site($order_id, $site_info);
-            
-            // Add failure note to order
-            $order = wc_get_order($order_id);
-            if ($order) {
-                $note = sprintf(
-                    __('Site creation failed for task: %s', 'iwp-woo-v2'),
-                    $task_id
-                );
-                $order->add_order_note($note, 1); // 1 = customer visible
-            }
-        }
-
-        // Remove from pending list
-        $pending_sites = get_option('iwp_pending_sites', array());
-        unset($pending_sites[$task_id]);
-        update_option('iwp_pending_sites', $pending_sites);
-    }
 
     /**
      * Update completed site information in order
@@ -582,24 +311,6 @@ class IWP_Site_Manager {
      * @param int $order_id
      * @param array $site_info
      */
-    private function update_completed_site($order_id, $site_info) {
-        // Read via the HPOS-safe helper (handles legacy postmeta fallback + migration).
-        $existing_sites = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_created_sites');
-        if (!is_array($existing_sites)) {
-            return;
-        }
-
-        // Find and update the site
-        foreach ($existing_sites as &$site) {
-            if ($site['task_id'] === $site_info['task_id']) {
-                $site = array_merge($site, $site_info);
-                break;
-            }
-        }
-
-        // Persist via the HPOS-safe helper so the write reaches the active store.
-        IWP_Woo_HPOS::update_order_meta($order_id, '_iwp_created_sites', $existing_sites);
-    }
 
     /**
      * Update failed site information in order
@@ -607,9 +318,6 @@ class IWP_Site_Manager {
      * @param int $order_id
      * @param array $site_info
      */
-    private function update_failed_site($order_id, $site_info) {
-        $this->update_completed_site($order_id, $site_info);
-    }
 
     /**
      * Check and update pending sites for a specific order
@@ -617,19 +325,6 @@ class IWP_Site_Manager {
      * @param int $order_id
      * @return bool True if any sites were updated
      */
-    public function check_order_pending_sites($order_id) {
-        $pending_sites = get_option('iwp_pending_sites', array());
-        $updated = false;
-        
-        foreach ($pending_sites as $task_id => $site_data) {
-            if ($site_data['order_id'] == $order_id) {
-                $this->check_single_site_status($task_id, $site_data);
-                $updated = true;
-            }
-        }
-        
-        return $updated;
-    }
 
     /**
      * Get sites for an order
@@ -638,119 +333,16 @@ class IWP_Site_Manager {
      * @return array
      */
     public function get_order_sites($order_id) {
-        // First, check for any pending sites for this order to ensure we have the latest status
-        $this->check_order_pending_sites($order_id);
-
-        $all_sites = array();
-        $seen_sites = array(); // For deduplication
-
-        // Debug logging
-        IWP_Logger::debug('Getting sites for order', 'site-manager', array('order_id' => $order_id));
-
-        // FIRST PRIORITY: Load sites from database (most up-to-date, includes reconciled demo sites)
-        IWP_Sites_Model::init();
-        $db_sites = IWP_Sites_Model::get_by_order_id($order_id);
-        IWP_Logger::debug('Found sites in database', 'site-manager', array('count' => is_array($db_sites) ? count($db_sites) : 0));
-
-        if (is_array($db_sites)) {
-            foreach ($db_sites as $db_site) {
-                // Transform database format to frontend format
-                $site = array(
-                    'site_id' => $db_site->site_id,
-                    'wp_url' => $db_site->site_url,
-                    'wp_username' => $db_site->wp_username,
-                    'wp_password' => $db_site->wp_password,
-                    'wp_admin_url' => $db_site->wp_admin_url,
-                    's_hash' => $db_site->s_hash,
-                    'status' => $db_site->status,
-                    'site_type' => $db_site->site_type ?? 'paid',
-                    'source' => $db_site->source,
-                    'plan_id' => $db_site->plan_id,
-                    // Whether the plan includes CDN, so the render layer knows
-                    // if a Clear Cache button can do anything. NULL on rows
-                    // predating this column; resolved lazily on first render.
-                    'has_cdn' => $db_site->has_cdn ?? null,
-                    // Pass api_response through so the render layer can
-                    // decode the failure message on demand for failed
-                    // sites (via IWP_Site_Manager::resolve_failure_message).
-                    // No precompute here — the work only runs when a
-                    // failed card actually renders.
-                    'api_response' => $db_site->api_response,
-                );
-
-                $unique_key = 'site_' . $db_site->site_id;
-                if (!isset($seen_sites[$unique_key])) {
-                    $all_sites[] = $site;
-                    $seen_sites[$unique_key] = true;
-                }
+        $sites = array();
+        foreach (IWP_Sites_Model::get_by_order_id($order_id) as $site) {
+            if ($site->source !== 'fluentcart' || $site->status === IWP_Sites_Model::STATUS_TRASHED) {
+                continue;
             }
+            $data = (array) $site;
+            $data['wp_url'] = $site->site_url;
+            $sites[] = $data;
         }
-
-        // SECOND PRIORITY: Load from order meta _iwp_sites_created (backward compatibility).
-        // Use the HPOS-safe helper so reads resolve under either data store and
-        // any pre-HPOS-fix postmeta-only value is migrated forward on first read.
-        $order_sites = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_sites_created');
-        IWP_Logger::debug('Found sites in _iwp_sites_created', 'site-manager', array('count' => is_array($order_sites) ? count($order_sites) : 0));
-
-        if (is_array($order_sites)) {
-            foreach ($order_sites as $site_data) {
-                // Transform order processor format to frontend format
-                $site = $this->transform_site_data_for_frontend($site_data);
-                if ($site) {
-                    // Create a unique key for deduplication (use site_id if available, otherwise wp_url)
-                    $unique_key = '';
-                    if (!empty($site['site_id'])) {
-                        $unique_key = 'site_' . $site['site_id'];
-                    } elseif (!empty($site['wp_url'])) {
-                        $unique_key = 'url_' . md5($site['wp_url']);
-                    } else {
-                        $unique_key = 'index_' . count($all_sites);
-                    }
-
-                    // Only add if not already seen (database sites take priority)
-                    if (!isset($seen_sites[$unique_key])) {
-                        $all_sites[] = $site;
-                        $seen_sites[$unique_key] = true;
-                    }
-                }
-            }
-        }
-        
-        // Only add legacy sites if no sites were found from the order processor
-        // This prevents duplicates while maintaining backward compatibility.
-        // HPOS-safe read: helper covers both wp_wc_orders_meta and wp_postmeta
-        // and self-heals postmeta-only values written by older plugin builds.
-        if (empty($all_sites)) {
-            $legacy_sites = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_created_sites');
-            IWP_Logger::debug('Found sites in _iwp_created_sites (legacy)', 'site-manager', array('count' => is_array($legacy_sites) ? count($legacy_sites) : 0));
-            if (is_array($legacy_sites)) {
-                foreach ($legacy_sites as $legacy_site) {
-                    // Create unique key for legacy sites
-                    $unique_key = '';
-                    if (!empty($legacy_site['site_id'])) {
-                        $unique_key = 'site_' . $legacy_site['site_id'];
-                    } elseif (!empty($legacy_site['wp_url'])) {
-                        $unique_key = 'url_' . md5($legacy_site['wp_url']);
-                    } else {
-                        $unique_key = 'legacy_' . count($all_sites);
-                    }
-                    
-                    if (!isset($seen_sites[$unique_key])) {
-                        $all_sites[] = $legacy_site;
-                        $seen_sites[$unique_key] = true;
-                    }
-                }
-            }
-        }
-        
-        // Hide soft-deleted (trashed) sites from customer-facing renderers.
-        // The admin Trash tab uses IWP_Sites_List_Table directly and is unaffected.
-        $all_sites = array_values(array_filter($all_sites, function ($s) {
-            return !isset($s['status']) || $s['status'] !== IWP_Sites_Model::STATUS_TRASHED;
-        }));
-
-        IWP_Logger::debug('Returning total sites for order', 'site-manager', array('order_id' => $order_id, 'total_count' => count($all_sites)));
-        return $all_sites;
+        return $sites;
     }
 
     /**
@@ -937,17 +529,17 @@ class IWP_Site_Manager {
     public function ajax_check_site_status() {
         // Verify nonce
         if (!wp_verify_nonce($_POST['nonce'] ?? '', 'iwp_check_status')) {
-            wp_die(__('Security check failed', 'iwp-woo-v2'));
+            wp_die(__('Security check failed', 'iwp-wp-integration'));
         }
 
         // Check capabilities
-        if (!current_user_can('view_woocommerce_reports')) {
-            wp_die(__('Insufficient permissions', 'iwp-woo-v2'));
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'iwp-wp-integration'));
         }
 
         $order_id = intval($_POST['order_id'] ?? 0);
         if (!$order_id) {
-            wp_send_json_error(__('Invalid order ID', 'iwp-woo-v2'));
+            wp_send_json_error(__('Invalid order ID', 'iwp-wp-integration'));
         }
 
         $sites = $this->get_order_sites($order_id);
@@ -1114,7 +706,7 @@ class IWP_Site_Manager {
         }
 
         // Check capabilities
-        if (!current_user_can('manage_woocommerce')) {
+        if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => __('Insufficient permissions', 'iwp-wp-integration')));
         }
 
@@ -1132,3 +724,4 @@ class IWP_Site_Manager {
         ));
     }
 }
+

@@ -60,7 +60,7 @@ class IWP_API_Client {
      * handles the upstream "X site name is not available." response (the
      * subdomain-already-taken case) and pass-through everything else
      * verbatim. Add new rewrite rules here so every customer-facing
-     * surface (shortcode JSON responses, WooCommerce checkout WP_Errors,
+     * surface (shortcode JSON responses, FluentCart checkout WP_Errors,
      * deferred-onboarding AJAX, subscription-switch order notes) gets
      * the same humanized text.
      *
@@ -144,7 +144,7 @@ class IWP_API_Client {
     private function make_request($endpoint, $args = array()) {
         if (empty($this->api_key)) {
             IWP_Logger::error('API key is empty', 'api-client');
-            return new WP_Error('no_api_key', __('API key is required', 'iwp-woo-v2'));
+            return new WP_Error('no_api_key', __('API key is required', 'iwp-wp-integration'));
         }
 
         $url = rtrim($this->api_url, '/') . '/' . ltrim($endpoint, '/');
@@ -206,7 +206,7 @@ class IWP_API_Client {
                 $error_message = sanitize_text_field($body_data['message']);
             } else {
                 $error_message = sprintf(
-                    __('API request failed with status code %d', 'iwp-woo-v2'),
+                    __('API request failed with status code %d', 'iwp-wp-integration'),
                     $response_code
                 );
             }
@@ -219,7 +219,7 @@ class IWP_API_Client {
             ));
 
             // Return a HUMANIZED WP_Error so every downstream caller —
-            // shortcode AJAX, WooCommerce checkout, deferred onboarding,
+            // shortcode AJAX, FluentCart checkout, deferred onboarding,
             // subscription switch — surfaces customer-friendly text by
             // default, without each having to know the rewrite rules.
             return new WP_Error('api_request_failed', self::humanize_error($error_message));
@@ -229,7 +229,7 @@ class IWP_API_Client {
         
         if (json_last_error() !== JSON_ERROR_NONE) {
             IWP_Logger::error('JSON decode error', 'api-client', array('error' => json_last_error_msg()));
-            return new WP_Error('json_decode_error', __('Invalid JSON response', 'iwp-woo-v2'));
+            return new WP_Error('json_decode_error', __('Invalid JSON response', 'iwp-wp-integration'));
         }
 
         IWP_Logger::debug('API request successful', 'api-client', $data);
@@ -403,7 +403,7 @@ class IWP_API_Client {
      */
     public function get_plan($plan_id) {
         if (empty($plan_id)) {
-            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-wp-integration'));
         }
         
         $response = $this->make_request('plans/' . sanitize_text_field($plan_id), array(
@@ -458,7 +458,7 @@ class IWP_API_Client {
      */
     public function get_snapshot($snapshot_slug) {
         if (empty($snapshot_slug)) {
-            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-wp-integration'));
         }
 
         $response = $this->make_request('snapshots/' . sanitize_text_field($snapshot_slug), array(
@@ -478,7 +478,7 @@ class IWP_API_Client {
      */
     public function create_site_from_snapshot($snapshot_slug, $site_data = array(), $plan_id = '') {
         if (empty($snapshot_slug)) {
-            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_snapshot_slug', __('Snapshot slug is required', 'iwp-wp-integration'));
         }
 
         $default_data = array(
@@ -533,7 +533,7 @@ class IWP_API_Client {
      */
     public function get_task_status($task_id) {
         if (empty($task_id)) {
-            return new WP_Error('invalid_task_id', __('Task ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_task_id', __('Task ID is required', 'iwp-wp-integration'));
         }
 
         $response = $this->make_request('tasks/' . sanitize_text_field($task_id) . '/status', array(
@@ -552,11 +552,11 @@ class IWP_API_Client {
      */
     public function upgrade_site_plan($site_id, $plan_id) {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
         }
 
         if (empty($plan_id)) {
-            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_plan_id', __('Plan ID is required', 'iwp-wp-integration'));
         }
 
         $upgrade_data = array(
@@ -681,7 +681,7 @@ class IWP_API_Client {
      */
     public function get_site_details($site_id) {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
         }
 
         IWP_Logger::debug('Fetching site details', 'api-client', array('site_id' => $site_id));
@@ -709,11 +709,11 @@ class IWP_API_Client {
      */
     public function add_domain_to_site($site_id, $domain_name, $type = 'primary') {
         if (empty($site_id) || !is_numeric($site_id)) {
-            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_site_id', __('Valid site ID is required', 'iwp-wp-integration'));
         }
 
         if (empty($domain_name)) {
-            return new WP_Error('invalid_domain', __('Domain name is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_domain', __('Domain name is required', 'iwp-wp-integration'));
         }
 
         if (!in_array($type, ['primary', 'alias'])) {
@@ -867,7 +867,7 @@ class IWP_API_Client {
      */
     public function delete_site($site_id) {
         if (empty($site_id)) {
-            return new WP_Error('invalid_site_id', __('Site ID is required', 'iwp-woo-v2'));
+            return new WP_Error('invalid_site_id', __('Site ID is required', 'iwp-wp-integration'));
         }
 
         // Support both numeric and hash site IDs
@@ -1008,11 +1008,11 @@ class IWP_API_Client {
      */
     public function update_site($site_id, $post_options = array()) {
         if (empty($site_id)) {
-            return new WP_Error('missing_site_id', __('Site ID is required', 'iwp-woo-v2'));
+            return new WP_Error('missing_site_id', __('Site ID is required', 'iwp-wp-integration'));
         }
 
         if (empty($this->api_key)) {
-            return new WP_Error('no_api_key', __('API key not configured', 'iwp-woo-v2'));
+            return new WP_Error('no_api_key', __('API key not configured', 'iwp-wp-integration'));
         }
 
         $endpoint = 'sites/' . intval($site_id);

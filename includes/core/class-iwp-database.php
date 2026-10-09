@@ -26,21 +26,6 @@ class IWP_Database {
      * @param mixed $data
      * @return bool
      */
-    public static function append_order_meta($order_id, $meta_key, $data) {
-        // Route through IWP_Woo_HPOS so the read picks up legacy postmeta-only
-        // values (pre-HPOS-fix writes) and the append persists to whichever
-        // table the active data store owns (wp_wc_orders_meta under HPOS,
-        // wp_postmeta under CPT).
-        $existing_data = IWP_Woo_HPOS::get_order_meta($order_id, $meta_key);
-
-        if (!is_array($existing_data)) {
-            $existing_data = array();
-        }
-
-        $existing_data[] = $data;
-
-        return IWP_Woo_HPOS::update_order_meta($order_id, $meta_key, $existing_data);
-    }
 
     /**
      * Update order meta with validation
@@ -51,19 +36,6 @@ class IWP_Database {
      * @param bool $merge_arrays Whether to merge if existing data is array
      * @return bool
      */
-    public static function update_order_meta($order_id, $meta_key, $data, $merge_arrays = false) {
-        if ($merge_arrays) {
-            // Helper handles the legacy fallback + active-store read in one call.
-            $existing_data = IWP_Woo_HPOS::get_order_meta($order_id, $meta_key);
-            if (is_array($existing_data) && is_array($data)) {
-                $data = array_merge($existing_data, $data);
-            }
-        }
-
-        // Helper handles order validation + HPOS-safe write; returns false if
-        // the order can't be resolved (same guard the old wc_get_order check gave).
-        return IWP_Woo_HPOS::update_order_meta($order_id, $meta_key, $data);
-    }
 
     /**
      * Get all InstaWP sites for an order
@@ -71,28 +43,6 @@ class IWP_Database {
      * @param int $order_id
      * @return array
      */
-    public static function get_order_sites($order_id) {
-        $sites = array();
-
-        // Read from both meta keys via the HPOS-safe helper so reads land in
-        // the active data store's table and any legacy postmeta-only values
-        // are picked up (and migrated forward by the helper on first read).
-        $created_sites = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_created_sites');
-        if (is_array($created_sites)) {
-            $sites = array_merge($sites, $created_sites);
-        }
-
-        $sites_created = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_sites_created');
-        if (is_array($sites_created)) {
-            foreach ($sites_created as $site_data) {
-                if (isset($site_data['site_data'])) {
-                    $sites[] = $site_data['site_data'];
-                }
-            }
-        }
-
-        return $sites;
-    }
 
     /**
      * Get mapped domains for an order
@@ -100,12 +50,6 @@ class IWP_Database {
      * @param int $order_id
      * @return array
      */
-    public static function get_order_domains($order_id) {
-        // HPOS-safe read — returns mapped domains from whichever table the
-        // active data store owns.
-        $domains = IWP_Woo_HPOS::get_order_meta($order_id, '_iwp_mapped_domains');
-        return is_array($domains) ? $domains : array();
-    }
 
     /**
      * Add mapped domain to order
@@ -114,9 +58,6 @@ class IWP_Database {
      * @param array $domain_info
      * @return bool
      */
-    public static function add_order_domain($order_id, $domain_info) {
-        return self::append_order_meta($order_id, '_iwp_mapped_domains', $domain_info);
-    }
 
     /**
      * Get plugin options with caching
@@ -157,19 +98,6 @@ class IWP_Database {
      * @param int $limit
      * @return array
      */
-    public static function get_snapshot_products($limit = -1) {
-        return get_posts(array(
-            'post_type' => 'product',
-            'post_status' => 'publish',
-            'numberposts' => $limit,
-            'meta_query' => array(
-                array(
-                    'key' => '_iwp_selected_snapshot',
-                    'compare' => 'EXISTS'
-                )
-            )
-        ));
-    }
 
     /**
      * Get users for dropdown (with caching)
@@ -213,30 +141,6 @@ class IWP_Database {
      * @param array $args
      * @return array
      */
-    public static function get_orders_with_sites($args = array()) {
-        $default_args = array(
-            'status'     => array('completed', 'processing'),
-            'limit'      => 20,
-            'meta_query' => array(
-                'relation' => 'OR',
-                array(
-                    'key'     => '_iwp_created_sites',
-                    'compare' => 'EXISTS',
-                ),
-                array(
-                    'key'     => '_iwp_sites_created',
-                    'compare' => 'EXISTS',
-                ),
-            ),
-        );
-
-        $args = wp_parse_args($args, $default_args);
-
-        // Route through the HPOS/CPT compat wrapper so meta_query is evaluated
-        // correctly on both data stores and orders whose meta still lives in
-        // wp_postmeta (pre-HPOS-fix plugin builds) are included.
-        return IWP_Woo_HPOS::get_orders($args);
-    }
 
     /**
      * Clean up old transients
@@ -258,46 +162,6 @@ class IWP_Database {
      *
      * @return array
      */
-    public static function get_site_creation_stats() {
-        global $wpdb;
-
-        $stats = array(
-            'total_orders_with_sites' => 0,
-            'total_sites_created'     => 0,
-            'sites_by_status'         => array(),
-            'sites_by_month'          => array(),
-        );
-
-        // Under HPOS authoritative, orders are rows in wp_wc_orders (not
-        // wp_posts) and their meta lives in wp_wc_orders_meta (not wp_postmeta).
-        // The legacy JOIN on wp_posts/wp_postmeta returns 0 in that case, so
-        // branch on the active data store and target the right table via
-        // WooCommerce's OrderUtil helper. is_hpos_enabled() already gates on
-        // class_exists for OrderUtil, so no need to re-check.
-        if (IWP_Woo_HPOS::is_hpos_enabled()) {
-            $meta_table = \Automattic\WooCommerce\Utilities\OrderUtil::get_table_for_order_meta();
-
-            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $stats['total_orders_with_sites'] = (int) $wpdb->get_var(
-                "SELECT COUNT(DISTINCT order_id)
-                 FROM {$meta_table}
-                 WHERE meta_key IN ('_iwp_created_sites', '_iwp_sites_created')"
-            );
-        } else {
-            // Legacy CPT path — orders are shop_order posts and meta is in postmeta.
-            $orders_query = "
-                SELECT COUNT(DISTINCT p.ID) as count
-                FROM {$wpdb->posts} p
-                INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-                WHERE p.post_type = 'shop_order'
-                AND (pm.meta_key = '_iwp_created_sites' OR pm.meta_key = '_iwp_sites_created')
-            ";
-
-            $stats['total_orders_with_sites'] = (int) $wpdb->get_var($orders_query);
-        }
-
-        return $stats;
-    }
 
 
 
@@ -498,3 +362,4 @@ class IWP_Database {
         return $wpdb->get_results($query);
     }
 }
+

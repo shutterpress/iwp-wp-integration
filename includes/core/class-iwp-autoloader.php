@@ -41,17 +41,10 @@ class IWP_Autoloader {
         // Define possible paths based on class name patterns
         $paths = array();
 
-        // Core classes
-        if (strpos($class_name, 'IWP_Woo_') === false) {
-            $paths[] = IWP_PLUGIN_PATH . 'includes/core/';
-            $paths[] = IWP_PLUGIN_PATH . 'includes/admin/';
-            $paths[] = IWP_PLUGIN_PATH . 'includes/frontend/';
-        }
-        
-        // WooCommerce integration classes
-        if (strpos($class_name, 'IWP_Woo_') === 0) {
-            $paths[] = IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/';
-        }
+        $paths[] = IWP_PLUGIN_PATH . 'includes/core/';
+        $paths[] = IWP_PLUGIN_PATH . 'includes/admin/';
+        $paths[] = IWP_PLUGIN_PATH . 'includes/frontend/';
+        $paths[] = IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/';
 
         // General paths as fallback
         $paths[] = IWP_PLUGIN_PATH . 'includes/';
@@ -67,28 +60,7 @@ class IWP_Autoloader {
             }
         }
 
-        // Legacy support: Check if it's an old class name pattern
-        if (strpos($class_name, 'IWP_Woo_V2_') === 0) {
-            // Try to map old class names to new ones
-            $new_class_name = str_replace('IWP_Woo_V2_', 'IWP_', $class_name);
-            
-            // Check if it's a WooCommerce-specific class
-            $woo_specific = array('Order_Processor', 'Product_Integration', 'HPOS');
-            foreach ($woo_specific as $woo_class) {
-                if (strpos($class_name, $woo_class) !== false) {
-                    $new_class_name = str_replace('IWP_Woo_V2_', 'IWP_Woo_', $class_name);
-                    break;
-                }
-            }
 
-            // Try to load with new class name
-            if (class_exists($new_class_name)) {
-                // Create an alias for backward compatibility
-                if (!class_exists($class_name, false)) {
-                    class_alias($new_class_name, $class_name);
-                }
-            }
-        }
     }
 }
 

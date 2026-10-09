@@ -231,23 +231,8 @@ class IWP_Settings_Page {
             
             <hr style="margin: 30px 0;">
             
-            <!-- Test Order Section -->
-            <div class="iwp-test-orders">
-                <h3><?php esc_html_e('Test Order Creation', 'iwp-wp-integration'); ?></h3>
-                <p class="description">
-                    <?php esc_html_e('Create test orders to verify your integration is working correctly.', 'iwp-wp-integration'); ?>
-                </p>
-                
-                <?php if (class_exists('WooCommerce')) : ?>
-                    <div class="iwp-test-form">
-                        <?php $this->render_test_order_form(); ?>
-                    </div>
-                <?php else : ?>
-                    <div class="notice notice-warning">
-                        <p><?php esc_html_e('WooCommerce is required for test order functionality.', 'iwp-wp-integration'); ?></p>
-                    </div>
-                <?php endif; ?>
-            </div>
+            <p><?php esc_html_e('To test provisioning, configure an InstaWP feed on a FluentCart product and complete a purchase using your payment gateway test mode.', 'iwp-wp-integration'); ?></p>
+
         </div>
         <?php
     }
@@ -367,38 +352,6 @@ class IWP_Settings_Page {
     /**
      * Render test order form
      */
-    private function render_test_order_form() {
-        $products = get_posts(array(
-            'post_type' => 'product',
-            'posts_per_page' => -1,
-            'meta_query' => array(
-                array(
-                    'key' => '_iwp_selected_snapshot',
-                    'compare' => 'EXISTS'
-                )
-            )
-        ));
-        ?>
-        
-        <div class="iwp-test-form-container">
-            <label for="iwp-test-product-select"><?php esc_html_e('Select Product:', 'iwp-wp-integration'); ?></label>
-            <select id="iwp-test-product-select" class="regular-text">
-                <option value=""><?php esc_html_e('Choose a product...', 'iwp-wp-integration'); ?></option>
-                <?php foreach ($products as $product) : ?>
-                    <option value="<?php echo esc_attr($product->ID); ?>">
-                        <?php echo esc_html($product->post_title); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            
-            <button type="button" id="iwp-create-test-order" class="button button-primary">
-                <?php esc_html_e('Create Test Order', 'iwp-wp-integration'); ?>
-            </button>
-            
-            <div id="iwp-test-results" class="iwp-test-results"></div>
-        </div>
-        <?php
-    }
 
     /**
      * Render inline scripts for tab functionality
@@ -538,60 +491,7 @@ class IWP_Settings_Page {
                 });
             });
             
-            // Test order creation handler
-            $('#iwp-create-test-order').on('click', function() {
-                var $btn = $(this);
-                var $results = $('#iwp-test-results');
-                var productId = $('#iwp-test-product-select').val();
-                
-                if (!productId) {
-                    alert('<?php esc_html_e('Please select a product', 'iwp-wp-integration'); ?>');
-                    return;
-                }
-                
-                var originalText = $btn.text();
-                $btn.text('<?php esc_html_e('Creating Order...', 'iwp-wp-integration'); ?>').prop('disabled', true);
-                $results.removeClass('has-content').html('');
-                
-                $.post(ajaxurl, {
-                    action: 'iwp_create_test_order',
-                    product_id: productId,
-                    nonce: '<?php echo wp_create_nonce('iwp_admin_nonce'); ?>'
-                }, function(response) {
-                    if (response.success) {
-                        var html = '<div class="notice notice-success">';
-                        html += '<p><strong>' + response.data.message + '</strong></p>';
-                        html += '<p><strong>Customer:</strong> ' + response.data.customer_name + ' (' + response.data.customer_email + ')</p>';
-                        html += '<p><strong>Order ID:</strong> #' + response.data.order_id + '</p>';
-                        html += '<p><strong>Snapshot:</strong> ' + response.data.snapshot_slug + '</p>';
-                        if (response.data.plan_id && response.data.plan_id !== 'No plan selected') {
-                            html += '<p><strong>Plan:</strong> ' + response.data.plan_id + '</p>';
-                        }
-                        html += '<p style="margin-top: 15px;">';
-                        html += '<a href="' + response.data.order_edit_url + '" class="button button-primary" target="_blank">View Order in Admin</a> ';
-                        html += '<a href="' + response.data.my_account_url + '" class="button button-secondary" target="_blank">View in My Account</a>';
-                        html += '</p>';
-                        html += '<p class="description" style="margin-top: 10px;">The order has been created and assigned to your user account. You can view it in My Account → Orders to test the customer experience.</p>';
-                        html += '</div>';
-                        
-                        $results.html(html).addClass('has-content');
-                    } else {
-                        var errorHtml = '<div class="notice notice-error">';
-                        errorHtml += '<p><strong>Error:</strong> ' + (response.data || 'Unknown error') + '</p>';
-                        errorHtml += '</div>';
-                        
-                        $results.html(errorHtml).addClass('has-content');
-                    }
-                }).fail(function() {
-                    var errorHtml = '<div class="notice notice-error">';
-                    errorHtml += '<p><strong>Error:</strong> Network error occurred</p>';
-                    errorHtml += '</div>';
-                    
-                    $results.html(errorHtml).addClass('has-content');
-                }).always(function() {
-                    $btn.text(originalText).prop('disabled', false);
-                });
-            });
+
         });
         </script>
         

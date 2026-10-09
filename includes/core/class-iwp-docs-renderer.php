@@ -24,7 +24,7 @@ class IWP_Docs_Renderer {
         'index'                    => 'Documentation Home',
         'getting-started'          => 'Getting Started',
         'settings'                 => 'Plugin Settings',
-        'woocommerce-products'     => 'WooCommerce Products',
+        'fluentcart-products'     => 'FluentCart Products',
         'orders-and-site-creation' => 'Orders & Site Creation',
         'managing-sites'           => 'Managing Sites',
         'customer-experience'      => 'Customer Experience',
@@ -363,3 +363,4 @@ class IWP_Docs_Renderer {
         <?php
     }
 }
+

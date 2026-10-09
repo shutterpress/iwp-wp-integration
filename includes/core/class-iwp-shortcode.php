@@ -1,6 +1,6 @@
 <?php
 /**
- * IWP Woo V2 Shortcode Class
+ * InstaWP Shortcode Class
  *
  * Handles the iwp_site_creator shortcode functionality
  *

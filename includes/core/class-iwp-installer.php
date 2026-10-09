@@ -125,22 +125,6 @@ class IWP_Installer {
                 UNIQUE KEY setting_key (setting_key)
             ) $charset_collate;",
 
-            // HPOS compatible order data table
-            "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}iwp_woo_order_data (
-                id bigint(20) unsigned NOT NULL auto_increment,
-                order_id bigint(20) unsigned NOT NULL,
-                order_type varchar(20) NOT NULL DEFAULT 'shop_order',
-                meta_key varchar(255) NOT NULL,
-                meta_value longtext,
-                created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                KEY order_id (order_id),
-                KEY order_type (order_type),
-                KEY meta_key (meta_key),
-                KEY created_at (created_at)
-            ) $charset_collate;",
-
             // Sites tracking table for real-time status updates
             "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}iwp_sites (
                 id bigint(20) unsigned NOT NULL auto_increment,
@@ -158,7 +142,7 @@ class IWP_Installer {
                 product_id bigint(20) unsigned NULL,
                 order_id bigint(20) unsigned NULL,
                 user_id bigint(20) unsigned NULL DEFAULT 0,
-                source varchar(50) NOT NULL DEFAULT 'woocommerce',
+                source varchar(50) NOT NULL DEFAULT 'fluentcart',
                 source_data longtext NULL,
                 is_pool tinyint(1) NOT NULL DEFAULT 0,
                 is_reserved tinyint(1) NOT NULL DEFAULT 1,
@@ -196,8 +180,6 @@ class IWP_Installer {
             'installed_at' => current_time('mysql'),
             // General Settings - All enabled by default for better user experience
             'enable_integration' => 'yes',
-            'auto_create_sites' => 'yes', 
-            'use_site_id_parameter' => 'yes',
             // Debug Settings - Reasonable defaults
             'debug_mode' => 'no',
             'log_level' => 'info',
@@ -262,11 +244,8 @@ class IWP_Installer {
             'api_key' => $api_key,
             // Set all checkboxes to enabled by default
             'enable_integration' => 'yes',
-            'auto_create_sites' => 'yes',
-            'use_site_id_parameter' => 'yes',
             // Customer dashboard credentials are off by default; enable if you
             // want WP username/password rendered on each site card.
-            'show_site_credentials_on_dashboard' => 'no',
             // Reasonable debug defaults
             'debug_mode' => 'no',
             'log_level' => 'info',

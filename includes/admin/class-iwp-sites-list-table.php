@@ -385,13 +385,6 @@ class IWP_Sites_List_Table extends WP_List_Table {
         $db_sites = $this->get_sites_from_database();
         $all_sites = array_merge($all_sites, $db_sites);
 
-        // Get sites from WooCommerce orders (legacy/backup). Pass $db_sites so
-        // any order-meta entry whose site_id is already represented in the DB
-        // (including trashed rows / deletion markers) is skipped at the source
-        // instead of relying on downstream dedupe.
-        $order_sites = $this->get_sites_from_orders($db_sites);
-        $all_sites = array_merge($all_sites, $order_sites);
-
         // Get sites from shortcode usage (stored in options)
         $shortcode_sites = $this->get_sites_from_shortcode();
         $all_sites = array_merge($all_sites, $shortcode_sites);
@@ -436,9 +429,9 @@ class IWP_Sites_List_Table extends WP_List_Table {
             $order_link = '';
 
             if (!empty($db_site->order_id)) {
-                $order = wc_get_order($db_site->order_id);
+                $order = $db_site->source === 'fluentcart' && class_exists('FluentCart\App\Models\Order') ? \FluentCart\App\Models\Order::find($db_site->order_id) : null;
                 if ($order) {
-                    $order_link = admin_url('post.php?post=' . $db_site->order_id . '&action=edit');
+                    $order_link = $order->getViewUrl('admin');
                 }
             }
 
@@ -535,54 +528,10 @@ class IWP_Sites_List_Table extends WP_List_Table {
     }
 
     /**
-     * Get sites from WooCommerce orders
+     * Get sites from FluentCart orders
      *
      * @return array
      */
-    private function get_sites_from_orders($db_sites = array()) {
-        $sites = array();
-
-        // Site_ids already represented by the DB-sourced list. Order-meta
-        // entries matching one of these are skipped: the DB row is the source
-        // of truth (including trashed rows / orphan deletion markers, which
-        // the downstream status filter then hides).
-        $db_site_ids = empty($db_sites) ? array(): array_column($db_sites, 'site_id');
-        $has_site_ids = count($db_site_ids) > 0;
-
-        // One HPOS-aware round trip — returns only orders that actually have
-        // one of the IWP meta keys (under either data store, with legacy
-        // postmeta fallback under HPOS). See
-        // IWP_Woo_HPOS::get_orders_with_meta() for the data-store branching.
-        $results = IWP_Woo_HPOS::get_orders_with_meta(array(
-            '_iwp_sites_created',
-            '_iwp_created_sites',
-        ));
-
-        foreach ($results as $result) {
-            $sites_data = maybe_unserialize($result->meta_value);
-            if (!is_array($sites_data)) {
-                continue;
-            }
-
-            $order = wc_get_order($result->order_id);
-            if (!$order) {
-                continue;
-            }
-
-            foreach ($sites_data as $site_data) {
-                $site = $this->format_order_site($site_data, $order);
-                if (!$site) {
-                    continue;
-                }
-                if ( $has_site_ids && !empty($site['site_id']) && in_array($site['site_id'], $db_site_ids, true) ) {
-                    continue;
-                }
-                $sites[] = $site;
-            }
-        }
-
-        return $sites;
-    }
 
     /**
      * Get sites from shortcode usage
@@ -599,82 +548,15 @@ class IWP_Sites_List_Table extends WP_List_Table {
      * Format order site data for display
      *
      * @param array $site_data Raw site data
-     * @param WC_Order $order Order object
+     * @param FluentCart Order $order Order object
      * @return array|null Formatted site data
      */
-    private function format_order_site($site_data, $order) {
-        // Handle both new and legacy data formats
-        $wp_url = '';
-        $wp_username = '';
-        $wp_password = '';
-        $status = 'unknown';
-        $created = '';
-        $site_id = '';
-        $s_hash = '';
-        $plan_id = '';
-        $action = 'created';
-
-        if (isset($site_data['site_data'])) {
-            // New format from order processor
-            $inner_data = $site_data['site_data'];
-            $wp_url = $inner_data['wp_url'] ?? '';
-            $wp_username = $inner_data['wp_username'] ?? '';
-            $wp_password = $inner_data['wp_password'] ?? '';
-            $status = $site_data['site_data']['status'] ?? $site_data['status'] ?? 'unknown';
-            $created = $inner_data['created_at'] ?? '';
-            $site_id = $inner_data['site_id'] ?? $inner_data['id'] ?? '';
-            $s_hash = $inner_data['s_hash'] ?? '';
-            $plan_id = $inner_data['plan_id'] ?? $site_data['plan_id'] ?? '';
-            $action = $site_data['action'] ?? 'created';
-        } else {
-            // Legacy format
-            $wp_url = $site_data['wp_url'] ?? '';
-            $wp_username = $site_data['wp_username'] ?? '';
-            $wp_password = $site_data['wp_password'] ?? '';
-            $status = $site_data['status'] ?? 'unknown';
-            $created = $site_data['created_at'] ?? '';
-            $site_id = $site_data['site_id'] ?? $site_data['id'] ?? '';
-            $s_hash = $site_data['s_hash'] ?? '';
-            $plan_id = $site_data['plan_id'] ?? '';
-            $action = $site_data['action'] ?? 'created';
-        }
-
-        if (empty($wp_url)) {
-            return null; // Skip sites without URL
-        }
-
-        // Determine badge based on action
-        $badge = null;
-        if ($action === 'reconciled') {
-            $badge = 'converted_demo';
-        } elseif ($action === 'upgraded') {
-            $badge = 'upgraded';
-        }
-
-        return array(
-            'site_url'     => $wp_url,
-            'username'     => $wp_username,
-            'password'     => $wp_password,
-            'plan_id'      => $plan_id,
-            'user'         => $this->get_user_display_name($order, $order->get_user_id()),
-            'source'       => 'WooCommerce',
-            'source_link'  => admin_url('post.php?post=' . $order->get_id() . '&action=edit'),
-            'source_id'    => $order->get_id(),
-            'source_badge' => $badge,
-            'status'       => $status,
-            'created'      => $created ?: $order->get_date_created()->format('Y-m-d H:i:s'),
-            'site_id'      => $site_id,
-            'order_id'     => $order->get_id(),
-            's_hash'       => $s_hash,
-            'is_upgraded'  => ($action === 'upgraded')
-        );
-    }
 
     /**
      * Determine source type and badge for a site
      *
      * @param string $source Source from database
-     * @param WC_Order|null $order Order object if available
+     * @param FluentCart Order|null $order Order object if available
      * @return array Array with 'text' and 'badge' keys
      */
     private function determine_source_type($source, $order = null) {
@@ -683,9 +565,9 @@ class IWP_Sites_List_Table extends WP_List_Table {
             'badge' => null
         );
 
-        // WooCommerce sources (with or without order)
-        if ($source === 'demo_to_paid' || $source === 'woocommerce') {
-            $result['text'] = 'WooCommerce';
+        // FluentCart sources (with or without order)
+        if ($source === 'demo_to_paid' || $source === 'fluentcart') {
+            $result['text'] = 'FluentCart';
 
             // Set badge for converted demos
             if ($source === 'demo_to_paid') {
@@ -738,8 +620,8 @@ class IWP_Sites_List_Table extends WP_List_Table {
                 }
                 return 'Shortcode';
 
-            case 'woocommerce':
-                return 'WooCommerce';
+            case 'fluentcart':
+                return 'FluentCart';
 
             default:
                 // Fallback: capitalize and replace underscores
@@ -750,7 +632,7 @@ class IWP_Sites_List_Table extends WP_List_Table {
     /**
      * Get user display name from order or user_id
      *
-     * @param WC_Order|null $order Order object
+     * @param FluentCart Order|null $order Order object
      * @param int|null $user_id WordPress user ID from database
      * @return string User display name
      */
@@ -765,7 +647,7 @@ class IWP_Sites_List_Table extends WP_List_Table {
 
         // Fallback to order if available
         if ($order) {
-            $order_user_id = $order->get_user_id();
+            $order_user_id = ($order->customer->user_id ?? 0);
 
             if ($order_user_id) {
                 // Order has a WordPress user
@@ -776,9 +658,9 @@ class IWP_Sites_List_Table extends WP_List_Table {
             }
 
             // Guest order - use billing information
-            $first_name = $order->get_billing_first_name();
-            $last_name = $order->get_billing_last_name();
-            $email = $order->get_billing_email();
+            $first_name = ($order->customer->first_name ?? '');
+            $last_name = ($order->customer->last_name ?? '');
+            $email = ($order->customer->email ?? '');
 
             if ($first_name || $last_name) {
                 $name = trim($first_name . ' ' . $last_name);
@@ -1126,6 +1008,6 @@ class IWP_Sites_List_Table extends WP_List_Table {
      * Display when no items found
      */
     public function no_items() {
-        esc_html_e('No InstaWP sites found. Sites will appear here after they are created through WooCommerce orders or shortcodes.', 'iwp-wp-integration');
+        esc_html_e('No InstaWP sites found. Sites will appear here after they are created through FluentCart orders or shortcodes.', 'iwp-wp-integration');
     }
 }

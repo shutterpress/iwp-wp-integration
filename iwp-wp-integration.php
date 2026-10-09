@@ -2,8 +2,8 @@
 /**
  * Plugin Name: InstaWP Integration
  * Plugin URI: https://instawp.com
- * Description: A comprehensive WordPress integration plugin for InstaWP that provides enhanced functionality, seamless integration, WooCommerce support, and standalone site creation tools.
- * Version: 0.0.14
+ * Description: InstaWP site provisioning for FluentCart, with standalone site creation tools.
+ * Version: 0.0.15
  * Author: InstaWP
  * Author URI: https://instawp.com
  * Text Domain: iwp-wp-integration
@@ -11,8 +11,6 @@
  * Requires at least: 5.0
  * Tested up to: 7.1
  * Requires PHP: 7.4
- * WC requires at least: 5.0
- * WC tested up to: 10.7
  * Network: false
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('IWP_VERSION', '0.0.14');
+define('IWP_VERSION', '0.0.15');
 define('IWP_PLUGIN_FILE', __FILE__);
 define('IWP_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('IWP_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -37,13 +35,6 @@ require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-autoloader.php';
 // Initialize GitHub auto-updater
 require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-github-updater.php';
 new IWP_GitHub_Updater();
-
-// Declare HPOS compatibility for WooCommerce integration
-add_action('before_woocommerce_init', function() {
-    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
-        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
-    }
-});
 
 // Initialize the plugin
 function iwp_init() {
@@ -64,96 +55,29 @@ function iwp_init() {
         IWP_Installer::set_default_settings();
     }
     
-    // Load the HPOS compat layer before anything that may call it.
-    // IWP_Admin_Simple, IWP_Frontend, IWP_Site_Manager and IWP_Database all
-    // route their order-meta reads/writes through IWP_Woo_HPOS, so its class
-    // must be declared before any of those classes instantiate or call into
-    // it. Methods resolve IWP_Woo_HPOS lazily at runtime today, but keeping
-    // the require_once here removes the dependency on load-order luck.
-    if (class_exists('WooCommerce')) {
-        require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-hpos.php';
-    }
-
-    // Initialize admin interface (admin only)
     if (is_admin()) {
         require_once IWP_PLUGIN_PATH . 'includes/admin/class-iwp-settings-page.php';
         require_once IWP_PLUGIN_PATH . 'includes/admin/class-iwp-admin-simple.php';
-
-        // Load database update notice
         require_once IWP_PLUGIN_PATH . 'includes/admin/class-iwp-db-update-notice.php';
-
-        // Initialize simple admin
         new IWP_Admin_Simple();
-
-        // Initialize WooCommerce product integration (admin only)
-        if (class_exists('WooCommerce')) {
-            require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-product-integration.php';
-            new IWP_Woo_Product_Integration();
-        }
     }
 
-    // Initialize WooCommerce order processing (both admin and frontend)
-    if (class_exists('WooCommerce')) {
-        require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-order-processor.php';
-        require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-product-fields.php';
-
-        new IWP_Woo_Order_Processor();
-        new IWP_Woo_Product_Fields();
-        
-        // Initialize WooCommerce Subscriptions integration if available
-        if (class_exists('WC_Subscriptions') || function_exists('wcs_get_subscription')) {
-            require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-subscriptions-integration.php';
-            require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-subscription-site-manager.php';
-            
-            new IWP_Woo_Subscriptions_Integration();
-            
-            // Initialize subscription switch handler (upgrade/downgrade)
-            require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-subscription-switch-handler.php';
-            new IWP_Woo_Subscription_Switch_Handler();
-
-            // Initialize subscription switch UI (radio buttons instead of quantity inputs)
-            require_once IWP_PLUGIN_PATH . 'includes/integrations/woocommerce/class-iwp-woo-subscription-switch-ui.php';
-            new IWP_Woo_Subscription_Switch_UI();
-            
-            // Schedule health checks
-            add_action('iwp_subscription_health_check', array('IWP_Woo_Subscription_Site_Manager', 'run_health_check'));
-            IWP_Woo_Subscription_Site_Manager::schedule_health_checks();
-        }
-    }
-    
     // Initialize site manager and other dependencies (needed for shortcode functionality)
     require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-site-manager.php';
     require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-database.php';
     require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-sites-model.php';
     
     // IWP_Service is already loaded above
+
+    // FluentCart keeps orders and variants in its own tables. Register its
+    // integration after all plugins have booted, regardless of plugin order.
+    add_action('init', 'iwp_init_fluentcart', 20);
     
     // Initialize shortcode functionality (both admin and frontend)
     require_once IWP_PLUGIN_PATH . 'includes/core/class-iwp-shortcode.php';
     new IWP_Shortcode();
 
-    // Initialize post-purchase onboarding (deferred site creation)
-    require_once IWP_PLUGIN_PATH . 'includes/frontend/class-iwp-onboarding.php';
-    new IWP_Onboarding();
-    
-    // Initialize frontend (for customer-facing features)
-    if (!is_admin() || wp_doing_ajax()) {
-        require_once IWP_PLUGIN_PATH . 'includes/frontend/class-iwp-frontend.php';
 
-        // Only initialize if WooCommerce is active
-        if (class_exists('WooCommerce')) {
-            new IWP_Frontend();
-
-            // Initialize Go Live page redirect handler
-            require_once IWP_PLUGIN_PATH . 'includes/frontend/class-iwp-golive-page.php';
-            new IWP_GoLive_Page();
-        }
-    }
-    
-    // Temporarily disable old admin system to avoid conflicts
-    // if (class_exists('IWP_Main')) {
-    //     IWP_Main::instance();
-    // }
 }
 
 // Enhanced debug logging for wpdb::prepare errors
@@ -197,6 +121,20 @@ add_action('plugins_loaded', function() {
 // Hook into plugins_loaded to ensure dependencies are loaded first
 add_action('plugins_loaded', 'iwp_init');
 
+function iwp_init_fluentcart() {
+    if (!class_exists('FluentCart\\App\\Modules\\Integrations\\BaseIntegrationManager')) {
+        return;
+    }
+    require_once IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/class-iwp-fluentcart-order-processor.php';
+    require_once IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/class-iwp-fluentcart-integration.php';
+    require_once IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/class-iwp-fluentcart-portal.php';
+    require_once IWP_PLUGIN_PATH . 'includes/integrations/fluentcart/class-iwp-fluentcart-subscriptions.php';
+    $processor = new IWP_FluentCart_Order_Processor();
+    (new IWP_FluentCart_Integration($processor))->register();
+    new IWP_FluentCart_Portal($processor);
+    new IWP_FluentCart_Subscriptions();
+}
+
 // Activation hook
 register_activation_hook(__FILE__, 'iwp_activate');
 
@@ -225,10 +163,8 @@ function iwp_deactivate() {
         IWP_Installer::deactivate();
     }
     
-    // Unschedule subscription health checks
-    if (class_exists('IWP_Woo_Subscription_Site_Manager')) {
-        IWP_Woo_Subscription_Site_Manager::unschedule_health_checks();
-    }
+    wp_clear_scheduled_hook('iwp_check_pending_sites');
+
 }
 
 // Uninstall hook

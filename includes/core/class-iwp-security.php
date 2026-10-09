@@ -139,28 +139,15 @@ class IWP_Security {
      * @return bool
      */
     public static function can_user_access_order($order_id, $user_id = null) {
-        if ($user_id === null) {
-            $user_id = get_current_user_id();
-        }
-
-        // Admin users can access all orders
-        if (current_user_can('manage_woocommerce')) {
+        if (current_user_can('manage_options')) {
             return true;
         }
-
-        // Check if order exists
-        $order = wc_get_order($order_id);
-        if (!$order) {
+        if (!class_exists('FluentCart\App\Models\Order')) {
             return false;
         }
-
-        // For logged-in users, check if they own the order
-        if ($user_id > 0) {
-            return $order->get_customer_id() == $user_id;
-        }
-
-        // For guests, additional validation would be needed (session, etc.)
-        return false;
+        $order = \FluentCart\App\Models\Order::find($order_id);
+        $user_id = $user_id === null ? get_current_user_id() : absint($user_id);
+        return $user_id > 0 && $order && $order->customer && (int) $order->customer->user_id === $user_id;
     }
 
     /**

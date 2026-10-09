@@ -65,38 +65,6 @@
             // Site status refresh
             $('#refresh-site-status').on('click', this.handleRefreshSiteStatus.bind(this));
             
-            // Test order creation - bind events with validation
-            $('#iwp-test-product-select').on('change', function() { 
-                self.handleProductSelectChange(); 
-                self.validateTestOrderForm(); 
-            });
-            $('#iwp-create-test-order').on('click', function(e) { 
-                console.log('Button clicked - basic handler');
-                self.handleCreateTestOrder(e); 
-            });
-            
-            // Fallback: Direct jQuery handler as backup
-            $(document).on('click', '#iwp-create-test-order', function(e) {
-                console.log('Button clicked - document handler');
-                self.handleCreateTestOrder(e);
-            });
-            $('input[name="iwp-customer-type"]').on('change', function() { 
-                self.handleCustomerTypeChange(); 
-                self.validateTestOrderForm(); 
-            });
-            $('#iwp-test-customer-select').on('change', function() { 
-                self.handleCustomerSelectChange(); 
-                self.validateTestOrderForm(); 
-            });
-            
-            // Add validation triggers for form fields that don't have handlers
-            $('#iwp-test-customer-first-name, #iwp-test-customer-last-name, #iwp-test-customer-email').on('input change', function() { 
-                self.validateTestOrderForm(); 
-            });
-            $('#iwp-new-user-username, #iwp-new-user-first-name, #iwp-new-user-last-name, #iwp-new-user-email').on('input change', function() { 
-                self.validateTestOrderForm(); 
-            });
-            
             // Form validation
             $('#iwp-settings-form input, #iwp-settings-form select').on('change', this.validateField);
             
@@ -216,7 +184,6 @@
             this.toggleDebugFields();
             
             // Initialize test order form
-            this.initTestOrderForm();
         },
 
         /**
@@ -365,7 +332,6 @@
                     
                 case 'testing':
                     // Initialize test components
-                    this.initTestOrderForm();
                     break;
             }
         },
@@ -383,7 +349,7 @@
                     helpText = 'View your InstaWP snapshots and plans data.';
                     break;
                 case 'testing':
-                    helpText = 'Create test orders to verify your configuration.';
+                    helpText = 'Complete a FluentCart test purchase to verify your configuration.';
                     break;
                 case 'documentation':
                     helpText = 'Find helpful resources and usage examples.';
@@ -1074,268 +1040,7 @@
             });
         },
 
-        /**
-         * Handle product selection change for test orders
-         */
-        handleProductSelectChange: function() {
-            // Product selection changed - validation handled by main event handler
-        },
 
-        /**
-         * Handle customer type change for test orders
-         */
-        handleCustomerTypeChange: function() {
-            var customerType = $('input[name="iwp-customer-type"]:checked').val();
-            
-            // Hide all customer detail sections
-            $('#iwp-guest-details, #iwp-new-user-details').hide();
-            $('#iwp-test-customer-select').closest('div').hide();
-            
-            // Show relevant section based on selected type
-            switch (customerType) {
-                case 'existing':
-                    $('#iwp-test-customer-select').closest('div').show();
-                    break;
-                case 'guest':
-                    $('#iwp-guest-details').show();
-                    break;
-                case 'new':
-                    $('#iwp-new-user-details').show();
-                    break;
-            }
-            
-            // Validation handled by main event handler
-        },
-
-        /**
-         * Handle customer selection change for test orders
-         */
-        handleCustomerSelectChange: function() {
-            // Customer selection changed - validation handled by main event handler
-        },
-
-        /**
-         * Initialize test order form
-         */
-        initTestOrderForm: function() {
-            var self = this;
-            
-            // Enable the button by default
-            $('#iwp-create-test-order').prop('disabled', false);
-            
-            // Use a small delay to ensure DOM is fully ready
-            setTimeout(function() {
-                // Debug: Check if form elements exist
-                if (typeof console !== 'undefined' && console.log) {
-                    console.log('Initializing test order form...', {
-                        productSelect: $('#iwp-test-product-select').length,
-                        customerTypeRadios: $('input[name="iwp-customer-type"]').length,
-                        customerSelect: $('#iwp-test-customer-select').length,
-                        createButton: $('#iwp-create-test-order').length
-                    });
-                }
-                
-                // Trigger initial customer type change to set up form
-                if ($('input[name="iwp-customer-type"]:checked').length) {
-                    $('input[name="iwp-customer-type"]:checked').trigger('change');
-                } else {
-                    // If no customer type is selected, select the first one and trigger change
-                    $('input[name="iwp-customer-type"]:first').prop('checked', true).trigger('change');
-                }
-                
-                // Ensure button stays enabled
-                $('#iwp-create-test-order').prop('disabled', false);
-            }, 100);
-        },
-
-        /**
-         * Validate test order form
-         */
-        validateTestOrderForm: function() {
-            var $button = $('#iwp-create-test-order');
-            var $results = $('#iwp-test-order-results');
-            
-            // Enable button by default - let the actual form submission handle validation
-            $button.prop('disabled', false);
-            
-            // Clear previous results
-            $results.empty();
-            
-            // Optional: Still log validation state for debugging
-            if (typeof console !== 'undefined' && console.log) {
-                var productId = $('#iwp-test-product-select').val();
-                var customerType = $('input[name="iwp-customer-type"]:checked').val();
-                
-                console.log('Test Order Form State:', {
-                    productId: productId,
-                    customerType: customerType,
-                    buttonEnabled: true
-                });
-            }
-        },
-
-        /**
-         * Handle test order creation
-         */
-        handleCreateTestOrder: function(e) {
-            e.preventDefault();
-            
-            // Debug logging
-            if (typeof console !== 'undefined' && console.log) {
-                console.log('Create Test Order button clicked!');
-            }
-            
-            var $button = $('#iwp-create-test-order'); // Use direct selector instead of $(this)
-            var $status = $('#iwp-test-order-status');
-            var $results = $('#iwp-test-order-results');
-            var originalText = $button.text();
-            
-            // Get form data
-            var productId = $('#iwp-test-product-select').val();
-            var customerType = $('input[name="iwp-customer-type"]:checked').val();
-            
-            if (!productId) {
-                IWP_Admin.showNotice('Please select a product first.', 'error');
-                return;
-            }
-            
-            // Prepare data based on customer type
-            var requestData = {
-                action: 'iwp_create_test_order',
-                nonce: iwp_admin.nonce,
-                product_id: productId,
-                customer_type: customerType
-            };
-            
-            switch (customerType) {
-                case 'existing':
-                    var customerId = $('#iwp-test-customer-select').val();
-                    if (!customerId) {
-                        IWP_Admin.showNotice('Please select a user.', 'error');
-                        return;
-                    }
-                    requestData.customer_id = customerId;
-                    break;
-                    
-                case 'guest':
-                    var guestFirstName = $('#iwp-test-customer-first-name').val();
-                    var guestLastName = $('#iwp-test-customer-last-name').val();
-                    var guestEmail = $('#iwp-test-customer-email').val();
-                    
-                    if (!guestEmail || !guestFirstName || !guestLastName) {
-                        IWP_Admin.showNotice('Please fill in all guest customer details.', 'error');
-                        return;
-                    }
-                    
-                    requestData.customer_first_name = guestFirstName;
-                    requestData.customer_last_name = guestLastName;
-                    requestData.customer_email = guestEmail;
-                    break;
-                    
-                case 'new':
-                    var newUsername = $('#iwp-new-user-username').val();
-                    var newFirstName = $('#iwp-new-user-first-name').val();
-                    var newLastName = $('#iwp-new-user-last-name').val();
-                    var newEmail = $('#iwp-new-user-email').val();
-                    
-                    if (!newUsername || !newEmail) {
-                        IWP_Admin.showNotice('Username and email are required for new users.', 'error');
-                        return;
-                    }
-                    
-                    requestData.new_user_username = newUsername;
-                    requestData.new_user_first_name = newFirstName;
-                    requestData.new_user_last_name = newLastName;
-                    requestData.new_user_email = newEmail;
-                    break;
-            }
-            
-            // Show loading state
-            $button.prop('disabled', true);
-            $button.text('Creating Test Order...');
-            $status.html('<span style="color: #0073aa;">Creating order...</span>');
-            $results.empty();
-            
-            $.ajax({
-                url: iwp_admin.ajax_url,
-                type: 'POST',
-                data: requestData,
-                success: function(response) {
-                    if (response.success) {
-                        $status.html('<span style="color: #46b450;">✓ Order created successfully!</span>');
-                        
-                        var customerInfo = '';
-                        if (response.data.customer_type === 'existing') {
-                            customerInfo = '<p><strong>Customer:</strong> Existing user (' + response.data.customer_email + ')</p>';
-                        } else if (response.data.customer_type === 'new') {
-                            customerInfo = '<p><strong>Customer:</strong> New user created (' + response.data.customer_email + ')</p>' +
-                                         '<p><small><em>Login credentials have been sent to the user via email.</em></small></p>';
-                        } else {
-                            customerInfo = '<p><strong>Customer:</strong> Guest checkout (' + response.data.customer_email + ')</p>';
-                        }
-                        
-                        var myAccountUrl = response.data.customer_id ? 
-                            iwp_admin.site_url + '/my-account/?customer_id=' + response.data.customer_id : '';
-                        
-                        var resultHtml = '<div style="background: #fff; border: 1px solid #c3c4c7; padding: 15px; border-radius: 4px;">' +
-                            '<h4 style="margin-top: 0;">Test Order Created Successfully</h4>' +
-                            '<p><strong>Message:</strong> ' + response.data.message + '</p>' +
-                            '<p><strong>Order ID:</strong> ' + response.data.order_id + '</p>' +
-                            '<p><strong>Snapshot:</strong> ' + response.data.snapshot_slug + '</p>' +
-                            customerInfo +
-                            '<p><strong>Actions:</strong> ' +
-                            '<a href="' + response.data.order_edit_url + '" class="button button-secondary" target="_blank">View Order</a> ' +
-                            '<a href="' + iwp_admin.orders_url + '" class="button button-secondary" target="_blank">View All Orders</a>';
-                        
-                        if (response.data.customer_id) {
-                            resultHtml += ' <a href="' + iwp_admin.site_url + '/my-account/" class="button button-secondary" target="_blank">Customer My Account</a>';
-                        }
-                        
-                        resultHtml += '</p>' +
-                            '<p class="description"><em>The site creation process should now be triggered automatically. Check the order notes for site creation status.</em></p>';
-                        
-                        if (response.data.customer_type === 'existing' && response.data.customer_id) {
-                            resultHtml += '<p class="description"><em><strong>To test customer view:</strong> Login as the selected user and visit My Account → Orders to see the site details.</em></p>';
-                        }
-                        
-                        resultHtml += '</div>';
-                        
-                        $results.html(resultHtml);
-                        
-                        IWPAdmin.showSaveNotification('Test order created successfully! Site creation is now in progress.');
-                    } else {
-                        $status.html('<span style="color: #d63638;">✗ Order creation failed</span>');
-                        
-                        var errorHtml = '<div style="background: #fff; border: 1px solid #c3c4c7; padding: 15px; border-radius: 4px;">' +
-                            '<h4 style="margin-top: 0; color: #d63638;">Test Order Creation Failed</h4>' +
-                            '<p><strong>Error:</strong> ' + (response.data || 'Unknown error occurred') + '</p>' +
-                            '</div>';
-                        
-                        $results.html(errorHtml);
-                        
-                        IWPAdmin.showSaveNotification('Failed to create test order: ' + (response.data || 'Unknown error'), true);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    $status.html('<span style="color: #d63638;">✗ Request failed</span>');
-                    
-                    var errorHtml = '<div style="background: #fff; border: 1px solid #c3c4c7; padding: 15px; border-radius: 4px;">' +
-                        '<h4 style="margin-top: 0; color: #d63638;">Request Failed</h4>' +
-                        '<p><strong>Error:</strong> ' + error + '</p>' +
-                        '<p><strong>Status:</strong> ' + status + '</p>' +
-                        '</div>';
-                    
-                    $results.html(errorHtml);
-                    
-                    IWPAdmin.showSaveNotification('Request failed: ' + error, true);
-                },
-                complete: function() {
-                    // Re-enable button
-                    $button.prop('disabled', false);
-                    $button.text(originalText);
-                }
-            });
-        }
     };
 
     // Initialize on document ready
