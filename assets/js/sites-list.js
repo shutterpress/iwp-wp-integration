@@ -1,24 +1,24 @@
 /**
- * Sites list page UI for the InstaWP Integration admin.
+ * Sites list page UI for the FluentCart InstaWP Provisioning admin.
  *
  * Currently wires the Show/Hide toggle for the Password column rendered by
- * IWP_Sites_List_Table::column_password().
+ * FCIP_Sites_List_Table::column_password().
  *
- * @package IWP
+ * @package FCIP
  */
 
 (function ($) {
     'use strict';
 
-    var labels = (window.iwpSitesList && window.iwpSitesList.labels) || {
+    var labels = (window.fcipSitesList && window.fcipSitesList.labels) || {
         show: 'Show',
         hide: 'Hide'
     };
 
-    $(document).on('click', '.iwp-show-password', function (e) {
+    $(document).on('click', '.fcip-show-password', function (e) {
         e.preventDefault();
         var $btn = $(this);
-        var $revealed = $btn.next('.iwp-password-revealed');
+        var $revealed = $btn.next('.fcip-password-revealed');
         if ($btn.text() === labels.show) {
             $revealed.text($btn.data('password'));
             $btn.text(labels.hide);
@@ -28,3 +28,4 @@
         }
     });
 }(jQuery));
+

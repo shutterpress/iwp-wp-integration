@@ -2,16 +2,16 @@ jQuery(document).ready(function($) {
     'use strict';
 
     // Fetch fresh nonce to handle cached pages, then initialize forms
-    $('.iwp-site-creator-form').each(function() {
+    $('.fcip-site-creator-form').each(function() {
         var $form = $(this);
         $.ajax({
-            url: iwp_shortcode_ajax.ajax_url,
+            url: fcip_shortcode_ajax.ajax_url,
             type: 'POST',
-            data: { action: 'iwp_refresh_nonce' },
+            data: { action: 'fcip_refresh_nonce' },
             dataType: 'json',
             success: function(response) {
                 if (response.success && response.data.nonce) {
-                    $form.find('input[name="iwp_site_creator_nonce"]').val(response.data.nonce);
+                    $form.find('input[name="fcip_site_creator_nonce"]').val(response.data.nonce);
                 }
                 initForm($form);
             },
@@ -23,13 +23,13 @@ jQuery(document).ready(function($) {
     });
 
     function initForm($form) {
-        const $container = $form.closest('.iwp-site-creator-container');
-        const $submitButton = $form.find('.iwp-site-creator-submit');
-        const $statusDiv = $form.find('.iwp-site-creator-status');
-        const $messageDiv = $form.find('.iwp-site-creator-message');
-        const $progressDiv = $form.find('.iwp-site-creator-progress');
-        const $progressBar = $form.find('.iwp-site-creator-progress-bar');
-        const $resultsDiv = $form.find('.iwp-site-creator-results');
+        const $container = $form.closest('.fcip-site-creator-container');
+        const $submitButton = $form.find('.fcip-site-creator-submit');
+        const $statusDiv = $form.find('.fcip-site-creator-status');
+        const $messageDiv = $form.find('.fcip-site-creator-message');
+        const $progressDiv = $form.find('.fcip-site-creator-progress');
+        const $progressBar = $form.find('.fcip-site-creator-progress-bar');
+        const $resultsDiv = $form.find('.fcip-site-creator-results');
 
         // Handle form submission
         $form.on('submit', function(e) {
@@ -47,7 +47,7 @@ jQuery(document).ready(function($) {
             const formData = $form.serialize();
             
             $.ajax({
-                url: iwp_shortcode_ajax.ajax_url,
+                url: fcip_shortcode_ajax.ajax_url,
                 type: 'POST',
                 data: formData,
                 dataType: 'json',
@@ -65,16 +65,16 @@ jQuery(document).ready(function($) {
         });
 
         // Handle copy buttons
-        $container.on('click', '.iwp-site-creator-copy-btn', function(e) {
+        $container.on('click', '.fcip-site-creator-copy-btn', function(e) {
             e.preventDefault();
             const copyType = $(this).data('copy');
             const $button = $(this);
             
             let textToCopy = '';
             if (copyType === 'username') {
-                textToCopy = $container.find('.iwp-site-creator-username').text();
+                textToCopy = $container.find('.fcip-site-creator-username').text();
             } else if (copyType === 'password') {
-                textToCopy = $container.find('.iwp-site-creator-password').text();
+                textToCopy = $container.find('.fcip-site-creator-password').text();
             }
 
             if (textToCopy) {
@@ -83,20 +83,20 @@ jQuery(document).ready(function($) {
         });
 
         // Handle password toggle
-        $container.on('click', '.iwp-site-creator-toggle-password', function(e) {
+        $container.on('click', '.fcip-site-creator-toggle-password', function(e) {
             e.preventDefault();
             const $button = $(this);
-            const $password = $container.find('.iwp-site-creator-password');
-            const $passwordHidden = $container.find('.iwp-site-creator-password-hidden');
+            const $password = $container.find('.fcip-site-creator-password');
+            const $passwordHidden = $container.find('.fcip-site-creator-password-hidden');
 
             if ($password.is(':visible')) {
                 $password.hide();
                 $passwordHidden.show();
-                $button.text(iwp_shortcode_ajax.messages.show_password);
+                $button.text(fcip_shortcode_ajax.messages.show_password);
             } else {
                 $password.show();
                 $passwordHidden.hide();
-                $button.text(iwp_shortcode_ajax.messages.hide_password);
+                $button.text(fcip_shortcode_ajax.messages.hide_password);
             }
         });
     }
@@ -105,10 +105,10 @@ jQuery(document).ready(function($) {
         let isValid = true;
         
         // Clear previous error states
-        $form.find('.iwp-site-creator-input').removeClass('error');
+        $form.find('.fcip-site-creator-input').removeClass('error');
         
         // Check required fields
-        $form.find('.iwp-site-creator-input[required]').each(function() {
+        $form.find('.fcip-site-creator-input[required]').each(function() {
             const $input = $(this);
             const value = $input.val().trim();
             
@@ -133,7 +133,7 @@ jQuery(document).ready(function($) {
     function showLoading($submitButton, $statusDiv, $messageDiv) {
         $submitButton.prop('disabled', true).text('Creating...');
         $statusDiv.show();
-        $messageDiv.text(iwp_shortcode_ajax.messages.creating);
+        $messageDiv.text(fcip_shortcode_ajax.messages.creating);
         startProgressAnimation();
     }
 
@@ -152,11 +152,11 @@ jQuery(document).ready(function($) {
     }
 
     function handleSiteCreationResponse(data, $form) {
-        const $container = $form.closest('.iwp-site-creator-container');
-        const $submitButton = $form.find('.iwp-site-creator-submit');
-        const $statusDiv = $form.find('.iwp-site-creator-status');
-        const $messageDiv = $form.find('.iwp-site-creator-message');
-        const $resultsDiv = $form.find('.iwp-site-creator-results');
+        const $container = $form.closest('.fcip-site-creator-container');
+        const $submitButton = $form.find('.fcip-site-creator-submit');
+        const $statusDiv = $form.find('.fcip-site-creator-status');
+        const $messageDiv = $form.find('.fcip-site-creator-message');
+        const $resultsDiv = $form.find('.fcip-site-creator-results');
 
 
         if (data.status === 'completed') {
@@ -168,7 +168,7 @@ jQuery(document).ready(function($) {
             }, 3000);
         } else if ((data.status === 'progress' || data.status === 'in_progress') && data.task_id) {
             // Site is being created, check status periodically
-            $messageDiv.text(iwp_shortcode_ajax.messages.checking_status);
+            $messageDiv.text(fcip_shortcode_ajax.messages.checking_status);
             checkTaskStatus(data.task_id, $form, data);
         } else {
             showError('Site creation status unknown', $statusDiv, $messageDiv, $submitButton);
@@ -176,21 +176,21 @@ jQuery(document).ready(function($) {
     }
 
     function checkTaskStatus(taskId, $form, initialData) {
-        const $container = $form.closest('.iwp-site-creator-container');
-        const $submitButton = $form.find('.iwp-site-creator-submit');
-        const $statusDiv = $form.find('.iwp-site-creator-status');
-        const $messageDiv = $form.find('.iwp-site-creator-message');
-        const $resultsDiv = $form.find('.iwp-site-creator-results');
+        const $container = $form.closest('.fcip-site-creator-container');
+        const $submitButton = $form.find('.fcip-site-creator-submit');
+        const $statusDiv = $form.find('.fcip-site-creator-status');
+        const $messageDiv = $form.find('.fcip-site-creator-message');
+        const $resultsDiv = $form.find('.fcip-site-creator-results');
 
         // Check status every 3 seconds
         const statusInterval = setInterval(function() {
             $.ajax({
-                url: iwp_shortcode_ajax.ajax_url,
+                url: fcip_shortcode_ajax.ajax_url,
                 type: 'POST',
                 data: {
-                    action: 'iwp_check_task_status',
+                    action: 'fcip_check_task_status',
                     task_id: taskId,
-                    nonce: iwp_shortcode_ajax.nonce_check_status
+                    nonce: fcip_shortcode_ajax.nonce_check_status
                 },
                 dataType: 'json',
                 success: function(response) {
@@ -204,7 +204,7 @@ jQuery(document).ready(function($) {
                             displaySiteResults(siteData, $container, $resultsDiv);
                             
                             // Show finalizing message and wait 5 seconds before applying post_options
-                            $messageDiv.text(iwp_shortcode_ajax.messages.finalizing);
+                            $messageDiv.text(fcip_shortcode_ajax.messages.finalizing);
                             
                             setTimeout(function() {
                                 applyDelayedPostOptions(siteData.site_id || siteData.id, $statusDiv, $messageDiv, $submitButton);
@@ -236,29 +236,29 @@ jQuery(document).ready(function($) {
     function displaySiteResults(data, $container, $resultsDiv) {
         // Populate site information
         if (data.site_url) {
-            $container.find('.iwp-site-creator-site-url')
+            $container.find('.fcip-site-creator-site-url')
                 .attr('href', data.site_url)
                 .text(data.site_url);
         }
         
         if (data.admin_username) {
-            $container.find('.iwp-site-creator-username').text(data.admin_username);
+            $container.find('.fcip-site-creator-username').text(data.admin_username);
         }
         
         if (data.admin_password) {
-            $container.find('.iwp-site-creator-password').text(data.admin_password);
+            $container.find('.fcip-site-creator-password').text(data.admin_password);
         }
         
         // Handle Magic Login vs regular admin login
         if (data.s_hash) {
             // Use Magic Login
-            const magicLoginUrl = iwp_shortcode_ajax.app_url + '/wordpress-auto-login?site=' + encodeURIComponent(data.s_hash);
-            $container.find('.iwp-site-creator-admin-url')
+            const magicLoginUrl = fcip_shortcode_ajax.app_url + '/wordpress-auto-login?site=' + encodeURIComponent(data.s_hash);
+            $container.find('.fcip-site-creator-admin-url')
                 .attr('href', magicLoginUrl)
                 .text('Magic Login');
         } else if (data.admin_url) {
             // Use regular admin login
-            $container.find('.iwp-site-creator-admin-url')
+            $container.find('.fcip-site-creator-admin-url')
                 .attr('href', data.admin_url)
                 .text('Login to Admin');
         }
@@ -304,7 +304,7 @@ jQuery(document).ready(function($) {
 
     function showCopyFeedback($button, success) {
         const originalText = $button.text();
-        const feedbackText = success ? iwp_shortcode_ajax.messages.copy_success : iwp_shortcode_ajax.messages.copy_error;
+        const feedbackText = success ? fcip_shortcode_ajax.messages.copy_success : fcip_shortcode_ajax.messages.copy_error;
         
         $button.text(feedbackText);
         
@@ -314,11 +314,11 @@ jQuery(document).ready(function($) {
     }
 
     function startProgressAnimation() {
-        $('.iwp-site-creator-progress-bar').addClass('animating');
+        $('.fcip-site-creator-progress-bar').addClass('animating');
     }
 
     function stopProgressAnimation() {
-        $('.iwp-site-creator-progress-bar').removeClass('animating');
+        $('.fcip-site-creator-progress-bar').removeClass('animating');
     }
 
     function applyDelayedPostOptions(siteId, $statusDiv, $messageDiv, $submitButton) {
@@ -332,12 +332,12 @@ jQuery(document).ready(function($) {
         }
 
         $.ajax({
-            url: iwp_shortcode_ajax.ajax_url,
+            url: fcip_shortcode_ajax.ajax_url,
             type: 'POST',
             data: {
-                action: 'iwp_apply_delayed_post_options',
+                action: 'fcip_apply_delayed_post_options',
                 site_id: siteId,
-                nonce: iwp_shortcode_ajax.nonce_apply_post_options
+                nonce: fcip_shortcode_ajax.nonce_apply_post_options
             },
             dataType: 'json',
             success: function(response) {

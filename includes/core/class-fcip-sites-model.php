@@ -1,0 +1,610 @@
+<?php
+/**
+ * Sites Model for FluentCart InstaWP Provisioning
+ */
+
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class FCIP_Sites_Model {
+    /**
+     * Status value used to mark a site as soft-deleted (visible under the
+     * admin Trash filter, hidden from customer-facing surfaces).
+     */
+    const STATUS_TRASHED = 'trashed';
+
+    private static $table_name;
+
+    /**
+     * wpdb format hint per column.
+     *
+     * Required because WP core's `wp_set_wpdb_vars()` (wp-includes/load.php)
+     * pre-populates `$wpdb->field_types['site_id'] = '%d'` and
+     * `field_types['user_id'] = '%d'` for multisite. When `$wpdb->insert()`
+     * or `$wpdb->update()` is called WITHOUT an explicit `$format`, wpdb
+     * falls back to that registry by column NAME (see
+     * wp-includes/class-wpdb.php:2898) — regardless of what the actual
+     * column type is in our custom table.
+     *
+     * Net effect without an explicit format: any non-numeric string
+     * written to `site_id` (e.g. "pending-XYZ" placeholder) is cast to
+     * integer `0` in PHP before the SQL is built. Once one such row
+     * exists, the UNIQUE constraint on `site_id` blocks every subsequent
+     * failed-pending insert with a duplicate-key error.
+     *
+     * Pass `self::format_for_data($data)` as the third arg to insert()
+     * and the fourth arg to update() to override the lookup.
+     *
+     * @var array<string, '%s'|'%d'|'%f'>
+     */
+    private static $column_formats = array(
+        'site_id'       => '%s',
+        'site_url'      => '%s',
+        'wp_username'   => '%s',
+        'wp_password'   => '%s',
+        'wp_admin_url'  => '%s',
+        's_hash'        => '%s',
+        'status'        => '%s',
+        'site_type'     => '%s',
+        'task_id'       => '%s',
+        'snapshot_slug' => '%s',
+        'plan_id'       => '%s',
+        'product_id'    => '%d',
+        'order_id'      => '%d',
+        'user_id'       => '%d',
+        'source'        => '%s',
+        'source_data'   => '%s',
+        'is_pool'       => '%d',
+        'is_reserved'   => '%d',
+        // 1 = the site's plan includes CDN, so its cache can be purged.
+        // 0 = it cannot. NULL = not yet determined.
+        'has_cdn' => '%d',
+        'expiry_hours'  => '%d',
+        'api_response'  => '%s',
+        'created_at'    => '%s',
+        'updated_at'    => '%s',
+    );
+
+    /**
+     * Build a positional `$format` array for wpdb based on $data's keys.
+     * Falls back to '%s' for any column not in the static map (caller
+     * passed an unexpected column — let wpdb treat it as a string).
+     */
+    private static function format_for_data($data) {
+        $formats = array();
+        foreach (array_keys($data) as $col) {
+            $formats[] = isset(self::$column_formats[$col]) ? self::$column_formats[$col] : '%s';
+        }
+        return $formats;
+    }
+
+    public static function init() {
+        global $wpdb;
+        self::$table_name = $wpdb->prefix . 'fcip_sites';
+    }
+
+    public static function create($data) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        $defaults = array(
+            'status' => 'creating',
+            'site_type' => 'paid',
+            'source' => 'fluentcart',
+            'is_pool' => 0,
+            'is_reserved' => 1,
+            'user_id' => 0,
+            'created_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql')
+        );
+
+        $site_data = wp_parse_args($data, $defaults);
+
+        $insert_data = array(
+            'site_id' => sanitize_text_field($site_data['site_id']),
+            'site_url' => !empty($site_data['site_url']) ? esc_url_raw($site_data['site_url']) : null,
+            'wp_username' => !empty($site_data['wp_username']) ? sanitize_text_field($site_data['wp_username']) : null,
+            'wp_password' => !empty($site_data['wp_password']) ? $site_data['wp_password'] : null,
+            'wp_admin_url' => !empty($site_data['wp_admin_url']) ? esc_url_raw($site_data['wp_admin_url']) : null,
+            's_hash' => !empty($site_data['s_hash']) ? sanitize_text_field($site_data['s_hash']) : null,
+            'status' => sanitize_text_field($site_data['status']),
+            'site_type' => sanitize_text_field($site_data['site_type']),
+            'task_id' => !empty($site_data['task_id']) ? sanitize_text_field($site_data['task_id']) : null,
+            'snapshot_slug' => !empty($site_data['snapshot_slug']) ? sanitize_text_field($site_data['snapshot_slug']) : null,
+            'plan_id' => !empty($site_data['plan_id']) ? sanitize_text_field($site_data['plan_id']) : null,
+            'product_id' => !empty($site_data['product_id']) ? intval($site_data['product_id']) : null,
+            'order_id' => !empty($site_data['order_id']) ? intval($site_data['order_id']) : null,
+            'user_id' => intval($site_data['user_id']),
+            'source' => sanitize_text_field($site_data['source']),
+            'source_data' => !empty($site_data['source_data']) ? wp_json_encode($site_data['source_data']) : null,
+            'is_pool' => intval($site_data['is_pool']),
+            'is_reserved' => intval($site_data['is_reserved']),
+            'expiry_hours' => !empty($site_data['expiry_hours']) ? intval($site_data['expiry_hours']) : null,
+            'api_response' => !empty($site_data['api_response']) ? wp_json_encode($site_data['api_response']) : null,
+            'created_at' => $site_data['created_at'],
+            'updated_at' => $site_data['updated_at']
+        );
+
+        // Explicit $format overrides WP core's field_types['site_id']='%d'
+        // lookup (see $column_formats docblock above) so the "pending-XYZ"
+        // placeholder used by FCIP_Site_Manager::create_site_with_tracking
+        // stores as the actual string instead of being cast to integer 0.
+        $result = $wpdb->insert(
+            self::$table_name,
+            $insert_data,
+            self::format_for_data($insert_data)
+        );
+
+        if ($result === false) {
+            FCIP_Logger::error('Failed to create site record', 'sites-model', array('error' => $wpdb->last_error));
+            return false;
+        }
+
+        return $wpdb->insert_id;
+    }
+
+    public static function update($site_id, $data) {
+        global $wpdb;
+        
+        FCIP_Logger::debug('sites model update() - Called with site_id: ' . $site_id, 'sites-model');
+        FCIP_Logger::debug('sites model update() - data', 'sites-model', $data);
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        // Sanitize data for database storage
+        $sanitized_data = array();
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                // JSON encode array values for database storage
+                $sanitized_data[$key] = wp_json_encode($value);
+                FCIP_Logger::debug('sites model update() - Converted array field "' . $key . '" to JSON', 'sites-model');
+            } else {
+                $sanitized_data[$key] = $value;
+            }
+        }
+        
+        $sanitized_data['updated_at'] = current_time('mysql');
+
+        FCIP_Logger::debug('sites model update() - About to call wpdb->update with sanitized data', 'sites-model');
+
+        // Explicit $format (4th arg) and $where_format (5th arg) both
+        // override WP core's field_types['site_id']='%d' lookup. Without
+        // the 4th, a site_id present in $sanitized_data (e.g. when
+        // create_site_with_tracking updates the placeholder to the real
+        // site_id) would be cast to int in the SET clause. Without the
+        // 5th, the WHERE clause would match against integer 0 instead of
+        // the actual stored placeholder string — UPDATE would silently
+        // affect 0 rows. See $column_formats docblock above.
+        $result = $wpdb->update(
+            self::$table_name,
+            $sanitized_data,
+            array('site_id' => sanitize_text_field($site_id)),
+            self::format_for_data($sanitized_data),
+            array('%s')
+        );
+        FCIP_Logger::debug('sites model update() - wpdb->update result: ' . ($result !== false ? 'SUCCESS' : 'FAILED'), 'sites-model');
+
+        // The line above is debug level, so a failure would be invisible on a
+        // default install. update() only returns false to the caller, so
+        // without this the row silently not updating leaves no trace. Mirrors
+        // the error log in create().
+        if ($result === false) {
+            FCIP_Logger::error('Failed to update site record', 'sites-model', array(
+                'site_id' => $site_id,
+                'error'   => $wpdb->last_error,
+            ));
+        }
+
+        return $result !== false;
+    }
+
+    public static function get_by_site_id($site_id) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM " . self::$table_name . " WHERE site_id = %s",
+            sanitize_text_field($site_id)
+        ));
+    }
+
+    public static function get_all($args = array()) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        $defaults = array(
+            'limit' => 20,
+            'offset' => 0,
+            'orderby' => 'created_at',
+            'order' => 'DESC'
+        );
+
+        $args = wp_parse_args($args, $defaults);
+
+        $sql = "SELECT * FROM " . self::$table_name . " ORDER BY created_at DESC LIMIT %d OFFSET %d";
+
+        return $wpdb->get_results($wpdb->prepare($sql, intval($args['limit']), intval($args['offset'])));
+    }
+
+    public static function get_pending_sites() {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        return $wpdb->get_results(
+            "SELECT * FROM " . self::$table_name . " WHERE status IN ('creating', 'progress') AND task_id IS NOT NULL ORDER BY created_at ASC"
+        );
+    }
+
+    /**
+     * Soft-delete a site: optionally fire the remote API delete, then flip
+     * the local row's status to STATUS_TRASHED. The row stays in the table
+     * so it can be reviewed under the admin Trash filter.
+     *
+     * Use this for the standard admin delete flow. For a hard delete that
+     * removes the row entirely, see delete() below.
+     *
+     * @param string              $site_id    InstaWP site identifier.
+     * @param FCIP_API_Client|null $api_client Optional configured client; if
+     *                                        provided, delete_site() is
+     *                                        called before the local status
+     *                                        update.
+     * @return bool True on successful local update.
+     */
+    public static function trash($site_id, $api_client = null) {
+        if (empty($site_id)) {
+            return false;
+        }
+
+        if (!self::get_by_site_id($site_id)) {
+            return false;
+        }
+
+        if ($api_client instanceof FCIP_API_Client) {
+            $api_client->delete_site($site_id);
+        }
+
+        if (self::get_by_site_id($site_id)) {
+            return self::update($site_id, array('status' => self::STATUS_TRASHED));
+        }
+
+        return false;
+    }
+
+    /**
+     * Permanently remove the site row. **Bypasses the Trash filter.**
+     *
+     * Use FCIP_Sites_Model::trash($site_id) for the standard admin delete
+     * flow; only call this for cleanup of already-trashed entries (e.g. a
+     * future "Empty Trash" workflow).
+     *
+     * @param string $site_id
+     * @return bool
+     */
+    public static function delete($site_id) {
+        global $wpdb;
+
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        $result = $wpdb->delete(
+            self::$table_name,
+            array('site_id' => sanitize_text_field($site_id)),
+            array('%s')
+        );
+
+        return $result !== false;
+    }
+
+    /**
+     * Get total count of sites
+     *
+     * @param array $filters Optional filters
+     * @return int Total count
+     */
+    public static function get_total_count($filters = array()) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        $where_clauses = array();
+        $where_values = array();
+
+        if (!empty($filters['status'])) {
+            $where_clauses[] = "status = %s";
+            $where_values[] = sanitize_text_field($filters['status']);
+        }
+
+        if (!empty($filters['source'])) {
+            $where_clauses[] = "source = %s";
+            $where_values[] = sanitize_text_field($filters['source']);
+        }
+
+        $where_sql = !empty($where_clauses) ? 'WHERE ' . implode(' AND ', $where_clauses) : '';
+
+        $sql = "SELECT COUNT(*) FROM " . self::$table_name . " " . $where_sql;
+
+        if (!empty($where_values)) {
+            FCIP_Logger::debug('sites model count() - where values', 'sites-model', $where_values);
+            FCIP_Logger::debug('sites model count() - SQL: ' . $sql, 'sites-model');
+            FCIP_Logger::debug('sites model count() - Values type check: is_array=' . (is_array($where_values) ? 'YES' : 'NO') . ', count=' . (is_array($where_values) ? count($where_values) : 'N/A'), 'sites-model');
+            
+            try {
+                $prepared_sql = $wpdb->prepare($sql, $where_values);
+                FCIP_Logger::debug('sites model count() - SQL prepared successfully', 'sites-model');
+                return intval($wpdb->get_var($prepared_sql));
+            } catch (Exception $e) {
+                FCIP_Logger::error('sites model count() - Exception during prepare: ' . $e->getMessage(), 'sites-model');
+                throw $e;
+            }
+        } else {
+            FCIP_Logger::debug('sites model count() - No where values, executing raw SQL', 'sites-model');
+            return intval($wpdb->get_var($sql));
+        }
+    }
+
+    /**
+     * Update site plan and track upgrade history
+     *
+     * @param string $site_id InstaWP site ID
+     * @param string $new_plan_id New plan ID
+     * @param array $upgrade_data Additional upgrade data
+     * @return bool Success status
+     */
+    public static function update_plan($site_id, $new_plan_id, $upgrade_data = array()) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        // Get current site data to track upgrade history
+        $current_site = self::get_by_site_id($site_id);
+        
+        if (!$current_site) {
+            return false;
+        }
+
+        // Prepare upgrade history
+        $upgrade_history = array();
+        
+        // Try to get existing upgrade history
+        if (!empty($current_site->api_response)) {
+            $existing_data = json_decode($current_site->api_response, true);
+            if (is_array($existing_data) && isset($existing_data['upgrade_history'])) {
+                $upgrade_history = $existing_data['upgrade_history'];
+            }
+        }
+
+        // Add new upgrade entry
+        $upgrade_history[] = array(
+            'previous_plan_id' => $current_site->plan_id,
+            'new_plan_id' => $new_plan_id,
+            'upgraded_at' => current_time('mysql'),
+            'order_id' => isset($upgrade_data['order_id']) ? $upgrade_data['order_id'] : null,
+            'product_id' => isset($upgrade_data['product_id']) ? $upgrade_data['product_id'] : null,
+            'upgrade_response' => isset($upgrade_data['upgrade_response']) ? $upgrade_data['upgrade_response'] : null
+        );
+
+        // Prepare API response data with upgrade history
+        $api_response_data = array(
+            'upgrade_history' => $upgrade_history,
+            'last_upgrade' => array(
+                'from' => $current_site->plan_id,
+                'to' => $new_plan_id,
+                'upgraded_at' => current_time('mysql')
+            )
+        );
+
+        // Merge with existing API response data if any
+        if (!empty($current_site->api_response)) {
+            $existing_data = json_decode($current_site->api_response, true);
+            if (is_array($existing_data)) {
+                $api_response_data = array_merge($existing_data, $api_response_data);
+            }
+        }
+
+        // Update the site record
+        $update_data = array(
+            'plan_id' => sanitize_text_field($new_plan_id),
+            'api_response' => wp_json_encode($api_response_data),
+            'updated_at' => current_time('mysql')
+        );
+
+        // Add any additional site details if provided in upgrade_data
+        if (isset($upgrade_data['site_url']) && !empty($upgrade_data['site_url'])) {
+            $update_data['site_url'] = esc_url_raw($upgrade_data['site_url']);
+        }
+        if (isset($upgrade_data['wp_username']) && !empty($upgrade_data['wp_username'])) {
+            $update_data['wp_username'] = sanitize_text_field($upgrade_data['wp_username']);
+        }
+        if (isset($upgrade_data['wp_password']) && !empty($upgrade_data['wp_password'])) {
+            $update_data['wp_password'] = $upgrade_data['wp_password'];
+        }
+        if (isset($upgrade_data['s_hash']) && !empty($upgrade_data['s_hash'])) {
+            $update_data['s_hash'] = sanitize_text_field($upgrade_data['s_hash']);
+        }
+
+        $result = $wpdb->update(
+            self::$table_name,
+            $update_data,
+            array('site_id' => sanitize_text_field($site_id)),
+            null,
+            array('%s')
+        );
+
+        if ($result !== false) {
+            FCIP_Logger::info('Site plan updated successfully', 'sites-model', array(
+                'site_id' => $site_id,
+                'previous_plan' => $current_site->plan_id,
+                'new_plan' => $new_plan_id
+            ));
+            return true;
+        } else {
+            FCIP_Logger::error('Failed to update site plan', 'sites-model', array(
+                'site_id' => $site_id,
+                'new_plan_id' => $new_plan_id,
+                'error' => $wpdb->last_error
+            ));
+            return false;
+        }
+    }
+
+    /**
+     * Get upgrade history for a site
+     *
+     * @param string $site_id InstaWP site ID
+     * @return array Upgrade history
+     */
+    public static function get_upgrade_history($site_id) {
+        $site = self::get_by_site_id($site_id);
+        
+        if (!$site || empty($site->api_response)) {
+            return array();
+        }
+
+        $api_data = json_decode($site->api_response, true);
+        
+        if (!is_array($api_data) || !isset($api_data['upgrade_history'])) {
+            return array();
+        }
+
+        return $api_data['upgrade_history'];
+    }
+
+    /**
+     * Get sites by order ID
+     *
+     * @param int $order_id Order ID
+     * @return array Array of site objects
+     */
+    public static function get_by_order_id($order_id) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM " . self::$table_name . " WHERE order_id = %d ORDER BY created_at DESC",
+            intval($order_id)
+        ));
+    }
+
+    /**
+     * Get sites by user ID
+     *
+     * @param int $user_id User ID
+     * @return array Array of site objects
+     */
+    public static function get_by_user_id($user_id) {
+        global $wpdb;
+        
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM " . self::$table_name . " WHERE user_id = %d ORDER BY created_at DESC",
+            intval($user_id)
+        ));
+    }
+
+    /**
+     * Get demo sites by email (for reconciliation)
+     *
+     * @param string $email Email address
+     * @return array Array of site objects
+     */
+    public static function get_demo_sites_by_email($email) {
+        global $wpdb;
+
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        // Query demo sites with matching email in source_data
+        $sites = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM " . self::$table_name . "
+             WHERE site_type = 'demo'
+             AND order_id IS NULL
+             AND JSON_EXTRACT(source_data, '$.email') = %s
+             ORDER BY created_at DESC",
+            $email
+        ));
+
+        return $sites;
+    }
+
+    /**
+     * Get all demo sites for a user
+     *
+     * @param int $user_id User ID
+     * @return array Array of site objects
+     */
+    public static function get_demo_sites_by_user($user_id) {
+        global $wpdb;
+
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM " . self::$table_name . "
+             WHERE site_type = 'demo'
+             AND user_id = %d
+             ORDER BY created_at DESC",
+            intval($user_id)
+        ));
+    }
+
+    /**
+     * Mark expired demo sites
+     * Updates status of demo sites that have passed their expiry_hours
+     *
+     * @return int Number of sites marked as expired
+     */
+    public static function mark_expired_demos() {
+        global $wpdb;
+
+        if (!self::$table_name) {
+            self::init();
+        }
+
+        // Find demo sites that have expired
+        $result = $wpdb->query(
+            "UPDATE " . self::$table_name . "
+             SET status = 'expired', updated_at = NOW()
+             WHERE site_type = 'demo'
+             AND expiry_hours IS NOT NULL
+             AND TIMESTAMPDIFF(HOUR, created_at, NOW()) > expiry_hours
+             AND status != 'expired'"
+        );
+
+        if ($result !== false && $result > 0) {
+            FCIP_Logger::info('Marked expired demo sites', 'sites-model', array(
+                'count' => $result
+            ));
+        }
+
+        return $result !== false ? $result : 0;
+    }
+}

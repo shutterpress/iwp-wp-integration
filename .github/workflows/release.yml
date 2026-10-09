@@ -20,7 +20,7 @@ jobs:
 
       - name: Verify version matches plugin header
         run: |
-          PLUGIN_VERSION=$(grep -oP "(?<=Version:\s)[\d\.]+" iwp-wp-integration.php | head -1)
+          PLUGIN_VERSION=$(grep -oP "(?<=Version:\s)[\d\.]+" fluentcart-instawp-provisioning.php | head -1)
           TAG_VERSION="${{ steps.get_version.outputs.VERSION }}"
           echo "Plugin version: $PLUGIN_VERSION"
           echo "Tag version: $TAG_VERSION"
@@ -30,11 +30,11 @@ jobs:
           fi
 
       - name: Create build directory
-        run: mkdir -p build/iwp-wp-integration
+        run: mkdir -p build/fluentcart-instawp-provisioning
 
       - name: Copy plugin files
         run: |
-          rsync -av --progress . build/iwp-wp-integration/ \
+          rsync -av --progress . build/fluentcart-instawp-provisioning/ \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='node_modules' \
@@ -56,14 +56,11 @@ jobs:
             --exclude='build' \
             --exclude='CLAUDE.md' \
             --exclude='TESTING-PLAN.md' \
-            --exclude='MIGRATION-GUIDE.md' \
-            --exclude='admin-migrate.php' \
-            --exclude='migrate-db.php'
 
       - name: Create plugin zip
         run: |
           cd build
-          zip -r iwp-wp-integration-${{ steps.get_version.outputs.VERSION }}.zip iwp-wp-integration/
+          zip -r fluentcart-instawp-provisioning-${{ steps.get_version.outputs.VERSION }}.zip fluentcart-instawp-provisioning/
           cd ..
 
       - name: Generate changelog for release
@@ -85,19 +82,19 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.get_version.outputs.VERSION }}
-          name: InstaWP Integration v${{ steps.get_version.outputs.VERSION }}
+          name: FluentCart InstaWP Provisioning v${{ steps.get_version.outputs.VERSION }}
           body_path: release_notes.md
           draft: false
           prerelease: false
-          files: build/iwp-wp-integration-${{ steps.get_version.outputs.VERSION }}.zip
+          files: build/fluentcart-instawp-provisioning-${{ steps.get_version.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iwp-wp-integration-${{ steps.get_version.outputs.VERSION }}
-          path: build/iwp-wp-integration-${{ steps.get_version.outputs.VERSION }}.zip
+          name: fluentcart-instawp-provisioning-${{ steps.get_version.outputs.VERSION }}
+          path: build/fluentcart-instawp-provisioning-${{ steps.get_version.outputs.VERSION }}.zip
           retention-days: 90
 
       - name: Output release information
@@ -105,3 +102,4 @@ jobs:
           echo "✅ Release created successfully!"
           echo "Version: ${{ steps.get_version.outputs.VERSION }}"
           echo "Download URL: ${{ steps.create_release.outputs.upload_url }}"
+

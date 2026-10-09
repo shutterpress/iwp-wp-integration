@@ -39,9 +39,6 @@ test.php export-ignore
 DEBUG-SCRIPTS.md export-ignore
 CLAUDE.md export-ignore
 TESTING-PLAN.md export-ignore
-MIGRATION-GUIDE.md export-ignore
-admin-migrate.php export-ignore
-migrate-db.php export-ignore
 phpunit.xml export-ignore
 tests export-ignore
 node_modules export-ignore
@@ -76,3 +73,4 @@ package-lock.json export-ignore
 *.pyc binary
 *.pdf binary
 *.mo binary
+
