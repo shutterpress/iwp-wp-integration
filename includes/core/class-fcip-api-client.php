@@ -912,7 +912,7 @@ class FCIP_API_Client {
         $endpoint = 'sites/' . $sanitized_site_id . '/reserve-toggle';
         
         $response = $this->make_request($endpoint, array(
-            'method' => 'POST'
+            'method' => 'PUT'
         ));
 
         if (is_wp_error($response)) {

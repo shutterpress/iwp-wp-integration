@@ -23,6 +23,8 @@ jobs:
         run: php tests/fluentcart.php
       - name: Reservation behavior
         run: php tests/reservations.php
+      - name: Reservation API transport
+        run: php tests/api-reservation.php
       - name: Fresh installation and isolation
         run: php tests/install.php
       - name: Release package identity
