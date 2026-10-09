@@ -196,18 +196,51 @@ namespace {
     $subscription = new \FluentCart\App\Models\Subscription();
     $subscription->id = 3; $subscription->parent_order_id = 40; $subscription->variation_id = 66; $subscription->status = 'active';
     \FluentCart\App\Models\Subscription::$rows[3] = $subscription;
+    $subscriptions = new FCIP_FluentCart_Subscriptions();
     FCIP_API_Client::$mode = 'pending'; $async = new \FluentCart\App\Models\Order(40); $async->type = 'subscription';
-    $processor->process_feed($async, 55, $feed, 7);
+    $temporary_feed = array_merge($feed, array('expiry_type' => 'temporary', 'expiry_hours' => 12));
+    $processor->process_feed($async, 55, $temporary_feed, 7);
+    check(count(FCIP_Service::$reservations) === 0, 'Pending sites wait until completion before subscription reservation is applied');
     $manager = new FCIP_Site_Manager(); $manager->check_pending_sites();
     $site = FCIP_FluentCart_Order_Processor::sites(40)[0];
     check($site->status === 'completed' && $site->wp_password === 'fresh-password', 'Async polling fetches credentials without any WooCommerce functions');
-    $subscriptions = new FCIP_FluentCart_Subscriptions();
+    check($site->is_reserved === 1 && FCIP_Service::$reservations === array(array($site->site_id, true)), 'Async completion applies the active subscription reservation to a temporary site');
+    $reservation_baseline = count(FCIP_Service::$reservations);
     $subscriptions->activate(array('subscription' => $subscription));
     $subscriptions->deactivate(array('subscription' => $subscription));
-    check(count(FCIP_Service::$reservations) === 2 && FCIP_Service::$reservations[0][1] === true && FCIP_Service::$reservations[1][1] === false, 'Subscription payment/status events change site reservations');
+    check(count(FCIP_Service::$reservations) === $reservation_baseline + 2 && FCIP_Service::$reservations[$reservation_baseline][1] === true && FCIP_Service::$reservations[$reservation_baseline + 1][1] === false, 'Subscription payment/status events change site reservations');
     $subscription->config['upgraded_to_sub_id'] = 4;
     $subscriptions->deactivate(array('subscription' => $subscription));
-    check(count(FCIP_Service::$reservations) === 2, 'Superseded subscription cannot expire successor site');
+    check(count(FCIP_Service::$reservations) === $reservation_baseline + 2, 'Superseded subscription cannot expire successor site');
+
+    // Pooled sites must receive the same reservation sync without a cron pass.
+    FCIP_API_Client::$mode = 'ready';
+    foreach (array('active', 'trialing', 'canceled', 'unmanaged', 'no_subscription') as $offset => $case) {
+        $pool_order = new \FluentCart\App\Models\Order(80 + $offset);
+        $pool_order->type = 'subscription';
+        if ($case !== 'no_subscription') {
+            $pool_subscription = new \FluentCart\App\Models\Subscription();
+            $pool_subscription->id = 80 + $offset;
+            $pool_subscription->parent_order_id = $pool_order->id;
+            $pool_subscription->variation_id = 66;
+            $pool_subscription->status = $case === 'unmanaged' ? 'active' : $case;
+            \FluentCart\App\Models\Subscription::$rows[$pool_subscription->id] = $pool_subscription;
+        }
+        $pool_feed = array_merge($temporary_feed, array('manage_subscription' => $case === 'unmanaged' ? 'no' : 'yes'));
+        $before_reservations = count(FCIP_Service::$reservations);
+        $processor->process_feed($pool_order, 55, $pool_feed, 7);
+        $pool_site = FCIP_FluentCart_Order_Processor::sites($pool_order->id)[0];
+        check($pool_site->status === 'completed' && $pool_site->is_pool, 'Pooled site is ready immediately: ' . $case);
+        if (in_array($case, array('active', 'trialing', 'canceled'), true)) {
+            $permanent = $case !== 'canceled';
+            check(count(FCIP_Service::$reservations) === $before_reservations + 1 && end(FCIP_Service::$reservations) === array($pool_site->site_id, $permanent), 'Pooled completion applies current subscription state: ' . $case);
+            check($pool_site->is_reserved === (int) $permanent, 'Pooled reservation is saved locally: ' . $case);
+        } else {
+            check(count(FCIP_Service::$reservations) === $before_reservations && !$pool_site->is_reserved, 'Unmanaged and non-subscription sites keep their temporary expiry: ' . $case);
+        }
+        $processor->process_feed($pool_order, 55, $pool_feed, 7);
+        check(count(FCIP_Service::$reservations) === $before_reservations + (in_array($case, array('active', 'trialing', 'canceled'), true) ? 1 : 0), 'Repeated paid feed does not repeat pooled completion: ' . $case);
+    }
 
     $mapping = new \FluentCart\App\Models\ProductMeta(); $mapping->id = 7; $mapping->object_id = 55;
     $mapping->meta_value = array_merge($feed, array('plan_id' => 'higher-plan', 'conditional_variation_ids' => array(77)));

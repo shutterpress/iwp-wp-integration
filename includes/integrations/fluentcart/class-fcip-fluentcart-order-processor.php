@@ -123,6 +123,15 @@ class FCIP_FluentCart_Order_Processor {
             $order->addLog('InstaWP site requested', $result['wp_url'] ?: __('Provisioning in progress.', 'fluentcart-instawp-provisioning'));
         }
         $order->updateMeta(self::META_KEY, $states);
+        // Pooled sites finish during creation rather than pending-site polling.
+        // Persist the item first, then run the same completion listeners so the
+        // current subscription state also governs immediately ready sites.
+        if (!is_wp_error($result)) {
+            $site = FCIP_Sites_Model::get_by_site_id($result['site_id']);
+            if ($site && $site->status === 'completed') {
+                do_action('fcip_fluentcart_site_status_updated', $site, array('status' => 'completed', 'site_url' => $site->site_url));
+            }
+        }
         return $result;
     }
 
